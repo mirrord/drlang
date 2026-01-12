@@ -23,11 +23,11 @@ Perfect for configuration files, template systems, data pipelines, and business 
 ## Quick Start
 
 ```bash
-pip install drl
+pip install drlang
 ```
 
 ```python
-from drl import interpret
+from drlang import interpret
 
 # Simple data access
 data = {"user": {"name": "Alice", "age": 30}}
@@ -68,7 +68,7 @@ print(interpret('upper($user>name)', data))  # "ALICE"
 ### Basic Data Access
 
 ```python
-import drl
+import drlang
 import json
 
 # Load data
@@ -108,7 +108,7 @@ result = drlang.interpret(expr, data)
 ### Working with Custom Functions
 
 ```python
-from drl import DRLConfig, interpret
+from drlang import DRLConfig, interpret
 
 # Define business logic
 def calculate_shipping(weight, zone):
@@ -144,7 +144,7 @@ drlang.interpret("$user info>full name", {"user info": {"full name": "Bob Smith"
 
 ### Mathematical Operators
 
-DRL supports standard mathematical operators with proper precedence:
+DRLang supports standard mathematical operators with proper precedence:
 
 - Addition: `+`
 - Subtraction: `-`
@@ -252,10 +252,10 @@ drlang.interpret(expr, {"age": 25, "verified": True})
 
 ## Custom Syntax
 
-DRL allows you to customize the syntax by changing the reference indicator and key delimiter symbols using the `DRLConfig` class:
+DRLang allows you to customize the syntax by changing the reference indicator and key delimiter symbols using the `DRLConfig` class:
 
 ```python
-from drl import interpret, DRLConfig
+from drlang import interpret, DRLConfig
 
 # JavaScript-style syntax with @ and .
 config = DRLConfig('@', '.')
@@ -273,7 +273,7 @@ interpret('&namespace::class::method', {'namespace': {'class': {'method': 'resul
 # Returns: "result"
 ```
 
-Custom syntax works with all DRL features including operators and functions:
+Custom syntax works with all DRLang features including operators and functions:
 
 ```python
 config = DRLConfig('@', '.')
@@ -292,12 +292,12 @@ interpret('split(@data.items, ",")', {'data': {'items': 'x,y,z'}}, config)
 
 ## Custom Functions
 
-Extend DRL with your own custom functions for domain-specific operations:
+Extend DRLang with your own custom functions for domain-specific operations:
 
 ### Basic Usage
 
 ```python
-from drl import interpret, DRLConfig
+from drlang import interpret, DRLConfig
 
 # Define custom function
 def celsius_to_fahrenheit(celsius):
@@ -313,7 +313,7 @@ result = interpret('c_to_f($temp)', {'temp': 25}, config)
 ### Using register_function Helper
 
 ```python
-from drl import register_function, DRLConfig
+from drlang import register_function, DRLConfig
 
 config = DRLConfig()
 
@@ -330,7 +330,7 @@ result = interpret('discount($price, 20)', {'price': 100}, config)
 ### Register Globally
 
 ```python
-from drl import register_function, interpret
+from drlang import register_function, interpret
 
 # Register globally (available without config)
 register_function('square', lambda x: x * x)
@@ -345,7 +345,7 @@ result = interpret('square(7)', {})
 - **Multiple arguments**: Support for any number of parameters
 - **Type conversion**: Automatic type conversion based on type hints
 - **Override built-ins**: Custom functions take precedence over built-in ones
-- **Full integration**: Works with all DRL features (operators, conditionals, references)
+- **Full integration**: Works with all ang features (operators, conditionals, references)
 
 ```python
 config = DRLConfig(custom_functions={
@@ -389,7 +389,7 @@ final_price = interpret(expr, data, config)
 
 ## Available Functions
 
-DRL includes 40+ built-in functions organized by category:
+DRLang includes 40+ built-in functions organized by category:
 
 ### Conditional Functions
 - `if(condition, true_value, false_value)` - Conditional expression
@@ -472,9 +472,9 @@ Functions automatically convert argument types based on type hints.
 ## Installation
 
 ```console
-pip install drl
+pip install drlang
 ```
 
 ## License
 
-`drl` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
+`drlang` is distributed under the terms of the [MIT](https://spdx.org/licenses/MIT.html) license.
