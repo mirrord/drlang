@@ -1,9 +1,9 @@
-# drl
+# DRLang
 
-[![PyPI - Version](https://img.shields.io/pypi/v/drl.svg)](https://pypi.org/project/drl)
-[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/drl.svg)](https://pypi.org/project/drl)
+[![PyPI - Version](https://img.shields.io/pypi/v/drlang.svg)](https://pypi.org/project/drlang)
+[![PyPI - Python Version](https://img.shields.io/pypi/pyversions/drlang.svg)](https://pypi.org/project/drlang)
 
-**Dynamic Reference Language (DRL)** - A powerful expression language for data processing and configuration management.
+**Dynamic Reference Language (DRLang)** - A powerful expression language for data processing and configuration management.
 
 DRL is a lightweight library that interprets string expressions to extract, process, and transform data from dictionary-like sources. It provides:
 
@@ -76,7 +76,7 @@ source_data = json.load(open("my_file.json"))
 
 # Access nested values
 config_item = "print($root>timestamp)"
-drl.interpret(config_item, source_data)
+drlang.interpret(config_item, source_data)
 # Prints the timestamp value
 ```
 
@@ -85,7 +85,7 @@ drl.interpret(config_item, source_data)
 ```python
 source_data = json.load(open("map_locations.json"))
 config_item = "split($houses>Maryland City>occupants, ',')"
-people = drl.interpret(config_item, source_data)
+people = drlang.interpret(config_item, source_data)
 # Returns list of occupants
 ```
 
@@ -95,13 +95,13 @@ people = drl.interpret(config_item, source_data)
 # Calculate discounted price
 data = {"price": 100, "discount": 0.2, "quantity": 5}
 expr = "($price * (1 - $discount)) * $quantity"
-total = drl.interpret(expr, data)
+total = drlang.interpret(expr, data)
 # Returns: 400.0
 
 # Conditional access control
 data = {"age": 25, "verified": True}
 expr = 'if($age >= 18 and $verified, "access granted", "access denied")'
-result = drl.interpret(expr, data)
+result = drlang.interpret(expr, data)
 # Returns: "access granted"
 ```
 
@@ -131,14 +131,14 @@ DRL supports the following language features:
 Access values from the context dictionary using the reference indicator (`$` by default) followed by keys separated by the key delimiter (`>` by default):
 
 ```python
-drl.interpret("$root>user>name", {"root": {"user": {"name": "Alice"}}})
+drlang.interpret("$root>user>name", {"root": {"user": {"name": "Alice"}}})
 # Returns: "Alice"
 ```
 
 Keys with spaces are supported:
 
 ```python
-drl.interpret("$user info>full name", {"user info": {"full name": "Bob Smith"}})
+drlang.interpret("$user info>full name", {"user info": {"full name": "Bob Smith"}})
 # Returns: "Bob Smith"
 ```
 
@@ -154,13 +154,13 @@ DRL supports standard mathematical operators with proper precedence:
 - Power: `^`
 
 ```python
-drl.interpret("$x + $y * 2", {"x": 10, "y": 5})
+drlang.interpret("$x + $y * 2", {"x": 10, "y": 5})
 # Returns: 20 (following order of operations: 10 + 5*2)
 
-drl.interpret("($x + $y) * 2", {"x": 10, "y": 5})
+drlang.interpret("($x + $y) * 2", {"x": 10, "y": 5})
 # Returns: 30 (parentheses override precedence)
 
-drl.interpret("2 ^ 3", {})
+drlang.interpret("2 ^ 3", {})
 # Returns: 8 (exponentiation)
 ```
 
@@ -169,17 +169,17 @@ drl.interpret("2 ^ 3", {})
 Call built-in functions using function names followed by arguments in parentheses:
 
 ```python
-drl.interpret('split($data, ",")', {"data": "a,b,c"})
+drlang.interpret('split($data, ",")', {"data": "a,b,c"})
 # Returns: ["a", "b", "c"]
 
-drl.interpret("max($x, $y)", {"x": 10, "y": 20})
+drlang.interpret("max($x, $y)", {"x": 10, "y": 20})
 # Returns: 20
 ```
 
 Functions can be nested and combined with operators:
 
 ```python
-drl.interpret("len($name) * 2", {"name": "Alice"})
+drlang.interpret("len($name) * 2", {"name": "Alice"})
 # Returns: 10 (len("Alice") = 5, 5 * 2 = 10)
 ```
 
@@ -195,13 +195,13 @@ Compare values using standard comparison operators:
 - Greater than or equal: `>=`
 
 ```python
-drl.interpret("$age >= 18", {"age": 25})
+drlang.interpret("$age >= 18", {"age": 25})
 # Returns: True
 
-drl.interpret("$price < 100", {"price": 150})
+drlang.interpret("$price < 100", {"price": 150})
 # Returns: False
 
-drl.interpret("$user>status == 'active'", {"user": {"status": "active"}})
+drlang.interpret("$user>status == 'active'", {"user": {"status": "active"}})
 # Returns: True
 ```
 
@@ -214,20 +214,20 @@ Combine conditions using logical operators:
 - `not` - Logical NOT
 
 ```python
-drl.interpret("$age >= 18 and $age < 65", {"age": 30})
+drlang.interpret("$age >= 18 and $age < 65", {"age": 30})
 # Returns: True
 
-drl.interpret("$premium or $quantity >= 10", {"premium": False, "quantity": 15})
+drlang.interpret("$premium or $quantity >= 10", {"premium": False, "quantity": 15})
 # Returns: True
 
-drl.interpret("not $disabled", {"disabled": False})
+drlang.interpret("not $disabled", {"disabled": False})
 # Returns: True
 ```
 
 Logical operators follow proper precedence (`not` > `and` > `or`):
 
 ```python
-drl.interpret("True or False and False", {})
+drlang.interpret("True or False and False", {})
 # Returns: True (evaluated as: True or (False and False))
 ```
 
@@ -236,17 +236,17 @@ drl.interpret("True or False and False", {})
 Use the `if()` function for conditional expressions:
 
 ```python
-drl.interpret('if($score >= 60, "pass", "fail")', {"score": 75})
+drlang.interpret('if($score >= 60, "pass", "fail")', {"score": 75})
 # Returns: "pass"
 
 # Nested conditions
 expr = 'if($score >= 90, "A", if($score >= 80, "B", "C"))'
-drl.interpret(expr, {"score": 85})
+drlang.interpret(expr, {"score": 85})
 # Returns: "B"
 
 # Complex conditions
 expr = 'if($age >= 18 and $verified, "access granted", "access denied")'
-drl.interpret(expr, {"age": 25, "verified": True})
+drlang.interpret(expr, {"age": 25, "verified": True})
 # Returns: "access granted"
 ```
 
@@ -414,19 +414,19 @@ DRL includes 40+ built-in functions organized by category:
 
 ```python
 # Validate email format
-drl.interpret(r'regex_search("@.*\\.", $email)', {"email": "user@example.com"})
+drlang.interpret(r'regex_search("@.*\\.", $email)', {"email": "user@example.com"})
 # Returns: True
 
 # Extract all numbers
-drl.interpret(r'regex_findall("\\d+", "a1b22c333")', {})
+drlang.interpret(r'regex_findall("\\d+", "a1b22c333")', {})
 # Returns: ['1', '22', '333']
 
 # Clean phone number
-drl.interpret(r'regex_sub("[^\\d]", "", "(123) 456-7890")', {})
+drlang.interpret(r'regex_sub("[^\\d]", "", "(123) 456-7890")', {})
 # Returns: '1234567890'
 
 # Extract domain from email
-drl.interpret(r'regex_extract("@(\\w+\\.\\w+)", "user@example.com", 1)', {})
+drlang.interpret(r'regex_extract("@(\\w+\\.\\w+)", "user@example.com", 1)', {})
 # Returns: 'example.com'
 ```
 

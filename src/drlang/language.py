@@ -1,6 +1,6 @@
 # this module contains the logic for the DRL language.
 from typing import Any, Dict, List, Union, Optional, Callable
-import drl.functions as functions
+import drlang.functions as functions
 
 
 class DRLConfig:
