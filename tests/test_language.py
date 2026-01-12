@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 import pytest
-from drl.language import (
+from drlang.language import (
     tokenize,
     resolve_reference,
     parse_line,

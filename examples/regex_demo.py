@@ -4,7 +4,7 @@ This example shows how to use regex functions for pattern matching,
 text extraction, and data validation.
 """
 
-from drl import interpret
+from drlang import interpret
 
 print("=" * 70)
 print("DRL Regex Functions Demo")

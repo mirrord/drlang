@@ -1,7 +1,7 @@
 """Tests for custom syntax configuration with DRLConfig."""
 
 import pytest
-from drl import interpret, DRLConfig
+from drlang import interpret, DRLConfig
 
 
 class TestCustomReferenceIndicators:

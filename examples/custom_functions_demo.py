@@ -4,7 +4,7 @@ This example shows how users can register their own custom functions
 to extend DRL's capabilities for domain-specific use cases.
 """
 
-from drl import interpret, DRLConfig, register_function
+from drlang import interpret, DRLConfig, register_function
 
 
 # Example 1: Simple custom function

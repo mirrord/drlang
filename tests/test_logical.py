@@ -1,6 +1,6 @@
 """Tests for logical operations and conditional expressions in DRL."""
 
-from drl import interpret
+from drlang import interpret
 
 
 class TestComparisonOperators:

@@ -1,4 +1,4 @@
-from src.drl.language import tokenize
+from src.drlang.language import tokenize
 
 tokens = tokenize("$score >= 90", None)
 print(f"Total tokens: {len(tokens)}")

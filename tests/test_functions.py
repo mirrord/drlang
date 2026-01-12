@@ -2,7 +2,7 @@
 #
 # SPDX-License-Identifier: MIT
 # import pytest
-from drl.functions import print_value, execute
+from drlang.functions import print_value, execute
 
 
 class TestSplitFunction:

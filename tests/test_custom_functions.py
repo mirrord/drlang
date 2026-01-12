@@ -1,7 +1,7 @@
 """Tests for custom user-provided functions in DRL."""
 
 import pytest
-from drl import interpret, DRLConfig, register_function
+from drlang import interpret, DRLConfig, register_function
 
 
 class TestCustomFunctions:
@@ -224,7 +224,7 @@ class TestCustomFunctions:
         assert result == 20
 
         # Clean up the global registry
-        from drl.functions import FUNCTIONS
+        from drlang.functions import FUNCTIONS
 
         if "quadruple" in FUNCTIONS:
             del FUNCTIONS["quadruple"]

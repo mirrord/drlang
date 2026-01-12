@@ -1,7 +1,7 @@
 """Tests for regex functions in DRL."""
 
 import pytest
-from drl import interpret
+from drlang import interpret
 
 
 class TestRegexSearch:
