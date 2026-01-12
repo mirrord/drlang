@@ -3,9 +3,9 @@ requires = ["hatchling"]
 build-backend = "hatchling.build"
 
 [project]
-name = "drl"
-dynamic = ["version"]
-description = ''
+name = "drlang"
+version = "0.1.12"
+description = 'lightweight dynamic reference language interpreter for python'
 readme = "README.md"
 requires-python = ">=3.8"
 license = "MIT"
@@ -27,31 +27,31 @@ classifiers = [
 dependencies = []
 
 [project.urls]
-Documentation = "https://github.com/Dane Howard/drl#readme"
-Issues = "https://github.com/Dane Howard/drl/issues"
-Source = "https://github.com/Dane Howard/drl"
+Documentation = "https://github.com/mirrord/drl#readme"
+Issues = "https://github.com/mirrord/drl/issues"
+Source = "https://github.com/mirrord/drl"
 
 [tool.hatch.version]
-path = "src/drl/__about__.py"
+path = "src/drlang/__about__.py"
 
 [tool.hatch.envs.types]
 extra-dependencies = [
   "mypy>=1.0.0",
 ]
 [tool.hatch.envs.types.scripts]
-check = "mypy --install-types --non-interactive {args:src/drl tests}"
+check = "mypy --install-types --non-interactive {args:src/drlang tests}"
 
 [tool.coverage.run]
-source_pkgs = ["drl", "tests"]
+source_pkgs = ["drlang", "tests"]
 branch = true
 parallel = true
 omit = [
-  "src/drl/__about__.py",
+  "src/drlang/__about__.py",
 ]
 
 [tool.coverage.paths]
-drl = ["src/drl", "*/drl/src/drl"]
-tests = ["tests", "*/drl/tests"]
+drlang = ["src/drlang", "*/drlang/src/drlang"]
+tests = ["tests", "*/drlang/tests"]
 
 [tool.coverage.report]
 exclude_lines = [
