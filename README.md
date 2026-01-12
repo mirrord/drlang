@@ -15,6 +15,7 @@ DRL is a lightweight library that interprets string expressions to extract, proc
 - 🎨 **Custom Syntax**: Tailor the syntax to match your preferred style
 - 🔧 **Custom Functions**: Extend with your own domain-specific functions
 - 📝 **Type Safety**: Automatic type conversion based on function signatures
+- 🐛 **Verbose Error Messages**: Detailed error context with position tracking and helpful suggestions
 
 Perfect for configuration files, template systems, data pipelines, and business rule engines.
 
@@ -59,6 +60,7 @@ print(interpret('upper($user>name)', data))  # "ALICE"
   - [Function Calls](#function-calls)
 - [Custom Syntax](#custom-syntax)
 - [Custom Functions](#custom-functions)
+- [Error Handling](#error-handling)
 - [Available Functions](#available-functions)
 - [Installation](#installation)
 - [License](#license)
@@ -386,6 +388,134 @@ expr = 'tax(discount($price, $tier), $tax_rate)'
 final_price = interpret(expr, data, config)
 # Returns: 91.8 (100 * 0.85 * 1.08)
 ```
+
+## Error Handling
+
+DRLang provides detailed, actionable error messages that show exactly where and how parsing failed. The error messages include:
+
+- **Position tracking**: Shows the exact location of the error in your expression
+- **Visual pointer**: A caret (^) highlights the problematic position
+- **Helpful context**: Suggestions and available options to fix the issue
+- **Error categories**: Specific exception types for different error scenarios
+
+### Exception Types
+
+```python
+from drlang import (
+    DRLError,           # Base exception class
+    DRLSyntaxError,     # Syntax errors during parsing
+    DRLReferenceError,  # Reference path not found
+    DRLNameError,       # Function not found
+    DRLTypeError        # Type-related errors
+)
+```
+
+### Example Error Messages
+
+**Missing reference key:**
+```python
+try:
+    interpret("$user>age", {"user": {"name": "Alice"}})
+except DRLReferenceError as e:
+    print(e)
+```
+
+Output:
+```
+Reference key 'age' not found in context
+
+  Expression: $user>age
+  Context: Failed at: user>age
+  Available keys: ['name']
+```
+
+**Unterminated string:**
+```python
+try:
+    interpret('split($data, "comma)', {"data": "a,b,c"})
+except DRLSyntaxError as e:
+    print(e)
+```
+
+Output:
+```
+Unterminated string literal starting with "
+
+  Expression: split($data, "comma)
+  Position 13:
+    split($data, "comma)
+                 ^
+  Context: String started at position 13 but never closed
+```
+
+**Undefined function:**
+```python
+try:
+    interpret("unknown_func(5)", {})
+except DRLNameError as e:
+    print(e)
+```
+
+Output:
+```
+Function 'unknown_func' not found
+
+  Expression: unknown_func(5)
+  Context: Function 'unknown_func' is not defined. Check spelling or register as custom function.
+```
+
+**Type error:**
+```python
+try:
+    interpret("$config>setting", {"config": "string value"})
+except DRLTypeError as e:
+    print(e)
+```
+
+Output:
+```
+Cannot navigate into non-dict value at key 'setting'
+
+  Expression: $config>setting
+  Context: Value at 'config' is str, not a dictionary
+```
+
+**Division by zero:**
+```python
+try:
+    interpret("100 / (5 - 5)", {})
+except DRLTypeError as e:
+    print(e)
+```
+
+Output:
+```
+Division by zero
+
+  Expression: 100 / (5 - 5)
+  Context: Cannot divide by zero
+```
+
+### Best Practices
+
+1. **Catch specific exceptions** for targeted error handling
+2. **Display error messages to users** for debugging configuration files
+3. **Validate expressions** before runtime when possible
+4. **Use try-except blocks** around interpret() calls in production
+
+```python
+from drlang import interpret, DRLError
+
+def safe_interpret(expression, context):
+    try:
+        return interpret(expression, context)
+    except DRLError as e:
+        # Log the detailed error message
+        print(f"DRL Error: {e}")
+        return None  # or a default value
+```
+
+See [examples/error_demo.py](examples/error_demo.py) for a comprehensive demonstration of error messages.
 
 ## Available Functions
 

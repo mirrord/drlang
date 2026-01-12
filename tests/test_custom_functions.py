@@ -1,7 +1,7 @@
 """Tests for custom user-provided functions in DRL."""
 
 import pytest
-from drlang import interpret, DRLConfig, register_function
+from drlang import interpret, DRLConfig, register_function, DRLNameError
 
 
 class TestCustomFunctions:
@@ -207,7 +207,7 @@ class TestCustomFunctions:
 
     def test_error_on_undefined_function(self):
         """Test that calling an undefined function raises an error."""
-        with pytest.raises(NameError, match="Function 'undefined' not found"):
+        with pytest.raises(DRLNameError, match="Function 'undefined' not found"):
             interpret("undefined(5)", {})
 
     def test_register_globally(self):

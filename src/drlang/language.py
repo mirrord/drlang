@@ -3,6 +3,75 @@ from typing import Any, Dict, List, Union, Optional, Callable
 import drlang.functions as functions
 
 
+class DRLError(Exception):
+    """Base exception class for DRL parsing and evaluation errors."""
+
+    def __init__(
+        self, message: str, expression: str = "", position: int = -1, context: str = ""
+    ):
+        """Initialize a DRL error with detailed context.
+
+        Args:
+            message: The error message
+            expression: The full expression being parsed
+            position: Position in the expression where error occurred
+            context: Additional context about what was being done
+        """
+        self.message = message
+        self.expression = expression
+        self.position = position
+        self.context = context
+        super().__init__(self._format_message())
+
+    def _format_message(self) -> str:
+        """Format a detailed error message with context."""
+        parts = [self.message]
+
+        if self.expression:
+            parts.append(f"\n  Expression: {self.expression}")
+
+            if self.position >= 0 and self.position < len(self.expression):
+                # Show pointer to error position
+                parts.append(f"  Position {self.position}:")
+                # Show surrounding context (up to 40 chars on each side)
+                start = max(0, self.position - 40)
+                end = min(len(self.expression), self.position + 40)
+                snippet = self.expression[start:end]
+                pointer_pos = self.position - start
+
+                parts.append(f"    {snippet}")
+                parts.append(f"    {' ' * pointer_pos}^")
+
+        if self.context:
+            parts.append(f"  Context: {self.context}")
+
+        return "\n".join(parts)
+
+
+class DRLSyntaxError(DRLError):
+    """Exception raised for syntax errors during parsing."""
+
+    pass
+
+
+class DRLNameError(DRLError):
+    """Exception raised when a name (function or reference) is not found."""
+
+    pass
+
+
+class DRLTypeError(DRLError):
+    """Exception raised for type-related errors."""
+
+    pass
+
+
+class DRLReferenceError(DRLError):
+    """Exception raised when a reference path cannot be resolved."""
+
+    pass
+
+
 class DRLConfig:
     """Configuration for DRL syntax symbols."""
 
@@ -68,12 +137,16 @@ def tokenize(expression: str, config: Optional[DRLConfig] = None) -> List[Token]
     Args:
         expression: The DRL expression to tokenize
         config: Optional DRLConfig with custom syntax symbols
+
+    Raises:
+        DRLSyntaxError: For invalid syntax during tokenization
     """
     if config is None:
         config = DEFAULT_CONFIG
 
     tokens = []
     i = 0
+    original_expression = expression  # Keep for error reporting
 
     while i < len(expression):
         # Skip whitespace
@@ -169,6 +242,7 @@ def tokenize(expression: str, config: Optional[DRLConfig] = None) -> List[Token]
         # String literal
         if expression[i] in "\"'":
             quote = expression[i]
+            quote_start = i
             i += 1
             string = ""
             while i < len(expression) and expression[i] != quote:
@@ -179,8 +253,14 @@ def tokenize(expression: str, config: Optional[DRLConfig] = None) -> List[Token]
                 else:
                     string += expression[i]
                 i += 1
-            if i < len(expression):
-                i += 1  # Skip closing quote
+            if i >= len(expression):
+                raise DRLSyntaxError(
+                    f"Unterminated string literal starting with {quote}",
+                    original_expression,
+                    quote_start,
+                    f"String started at position {quote_start} but never closed",
+                )
+            i += 1  # Skip closing quote
             tokens.append(Token("STRING", string))
             continue
 
@@ -235,7 +315,12 @@ def tokenize(expression: str, config: Optional[DRLConfig] = None) -> List[Token]
         # Exclamation mark for 'not' (handled as part of !=, but standalone is invalid)
         if expression[i] == "!":
             # If we reach here, it's not part of !=, so it's invalid
-            raise SyntaxError(f"Unexpected '!' at position {i}")
+            raise DRLSyntaxError(
+                "Unexpected '!' character - did you mean '!=' for not-equal comparison?",
+                original_expression,
+                i,
+                "The '!' character is only valid as part of the '!=' operator",
+            )
 
         # Numeric literals
         if expression[i].isdigit() or (
@@ -290,13 +375,24 @@ def tokenize(expression: str, config: Optional[DRLConfig] = None) -> List[Token]
             continue
 
         # Unknown character - skip it
+        if not expression[i].isspace():
+            raise DRLSyntaxError(
+                f"Unexpected character '{expression[i]}'",
+                original_expression,
+                i,
+                "This character is not valid DRL syntax",
+            )
         i += 1
 
     return tokens
 
 
 def resolve_reference(
-    reference: str, context: Dict[str, Any], config: Optional[DRLConfig] = None
+    reference: str,
+    context: Dict[str, Any],
+    config: Optional[DRLConfig] = None,
+    expression: str = "",
+    position: int = -1,
 ) -> Any:
     """Resolve a data reference like 'root>timestamp' from context dict.
 
@@ -304,25 +400,49 @@ def resolve_reference(
         reference: The reference path (e.g., 'root>timestamp')
         context: The data dictionary to resolve from
         config: Optional DRLConfig with custom key delimiter
+        expression: The full expression being parsed (for error reporting)
+        position: Position in expression (for error reporting)
 
     Returns:
         The resolved value
 
     Raises:
-        KeyError: If the reference path doesn't exist
+        DRLReferenceError: If the reference path doesn't exist
+        DRLTypeError: If trying to navigate into a non-dict value
     """
     if config is None:
         config = DEFAULT_CONFIG
 
     parts = reference.split(config.key_delimiter)
     value = context
+    path_so_far = []
 
     for part in parts:
         part = part.strip()
+        path_so_far.append(part)
+
         if isinstance(value, dict):
+            if part not in value:
+                available_keys = list(value.keys())[:5]  # Show up to 5 keys
+                key_hint = (
+                    f"Available keys: {available_keys}"
+                    if available_keys
+                    else "Dictionary is empty"
+                )
+                raise DRLReferenceError(
+                    f"Reference key '{part}' not found in context",
+                    expression,
+                    position,
+                    f"Failed at: {config.key_delimiter.join(path_so_far)}\n  {key_hint}",
+                )
             value = value[part]
         else:
-            raise TypeError(f"Cannot navigate into non-dict value at '{part}'")
+            raise DRLTypeError(
+                f"Cannot navigate into non-dict value at key '{part}'",
+                expression,
+                position,
+                f"Value at '{config.key_delimiter.join(path_so_far[:-1])}' is {type(value).__name__}, not a dictionary",
+            )
 
     return value
 
@@ -340,10 +460,14 @@ def parse_line(
     - Simple tokens are returned as-is
     - Function calls are returned as nested lists: [function_name, arg1, arg2, ...]
     - Operator expressions: ['OPERATOR', operator, left, right]
+
+    Raises:
+        DRLSyntaxError: For syntax errors during parsing
     """
     if config is None:
         config = DEFAULT_CONFIG
 
+    original_line = line  # Keep for error reporting
     tokens = tokenize(line, config)
 
     if not tokens:
@@ -417,7 +541,12 @@ def parse_line(
     def parse_primary(tokens, start=0):
         """Parse a primary expression (function call, value, or parenthesized expression)."""
         if start >= len(tokens):
-            return None, start
+            raise DRLSyntaxError(
+                "Unexpected end of expression",
+                original_line,
+                len(original_line) - 1,
+                "Expected a value, reference, or function call",
+            )
 
         token = tokens[start]
 
@@ -425,8 +554,14 @@ def parse_line(
         if token.type == "LPAREN":
             start += 1
             expr, start = parse_expression_with_precedence(tokens, start)
-            if start < len(tokens) and tokens[start].type == "RPAREN":
-                start += 1
+            if start >= len(tokens) or tokens[start].type != "RPAREN":
+                raise DRLSyntaxError(
+                    "Missing closing parenthesis ')'",
+                    original_line,
+                    len(original_line) - 1,
+                    "Every opening '(' must have a matching closing ')'",
+                )
+            start += 1
             return expr, start
 
         # Function call
@@ -436,7 +571,12 @@ def parse_line(
 
             # Expect LPAREN
             if start >= len(tokens) or tokens[start].type != "LPAREN":
-                raise SyntaxError(f"Expected '(' after function name '{func_name}'")
+                raise DRLSyntaxError(
+                    f"Expected '(' after function name '{func_name}'",
+                    original_line,
+                    -1,
+                    f"Function calls must be followed by parentheses: {func_name}(...)",
+                )
             start += 1
 
             # Parse arguments
@@ -454,7 +594,12 @@ def parse_line(
 
             # Expect RPAREN
             if start >= len(tokens) or tokens[start].type != "RPAREN":
-                raise SyntaxError("Expected ')' after function arguments")
+                raise DRLSyntaxError(
+                    f"Missing closing parenthesis for function '{func_name}'",
+                    original_line,
+                    len(original_line) - 1,
+                    f"Function call started but never closed: {func_name}(...)",
+                )
             start += 1
 
             return [func_name] + args, start
@@ -467,7 +612,10 @@ def parse_line(
 
 
 def evaluate(
-    parsed, context: Dict[str, Any], config: Optional[DRLConfig] = None
+    parsed,
+    context: Dict[str, Any],
+    config: Optional[DRLConfig] = None,
+    expression: str = "",
 ) -> Any:
     """Evaluate a parsed DRL expression.
 
@@ -475,9 +623,15 @@ def evaluate(
         parsed: Result from parse_line()
         context: The data dictionary
         config: Optional DRLConfig with custom syntax symbols
+        expression: The original expression (for error reporting)
 
     Returns:
         The evaluated result
+
+    Raises:
+        DRLReferenceError: If a reference cannot be resolved
+        DRLNameError: If a function is not found
+        DRLTypeError: For type-related errors
     """
     if config is None:
         config = DEFAULT_CONFIG
@@ -485,7 +639,7 @@ def evaluate(
     # Handle Token directly
     if isinstance(parsed, Token):
         if parsed.type == "REFERENCE":
-            return resolve_reference(parsed.value, context, config)
+            return resolve_reference(parsed.value, context, config, expression, -1)
         elif parsed.type == "STRING":
             return parsed.value
         elif parsed.type == "NUMBER":
@@ -499,7 +653,12 @@ def evaluate(
         elif parsed.type == "IDENTIFIER":
             return parsed.value
         else:
-            raise ValueError(f"Cannot evaluate token type: {parsed.type}")
+            raise DRLSyntaxError(
+                f"Cannot evaluate token type: {parsed.type}",
+                expression,
+                -1,
+                f"Token with value '{parsed.value}' has unexpected type",
+            )
 
     # Handle function call or operator (list)
     if isinstance(parsed, list) and len(parsed) > 0:
@@ -507,8 +666,36 @@ def evaluate(
             # Operator expression: ['OPERATOR', op, left, right]
             if parsed[0] == "OPERATOR" and len(parsed) == 4:
                 operator = parsed[1]
-                left = evaluate(parsed[2], context, config)
-                right = evaluate(parsed[3], context, config)
+                try:
+                    left = evaluate(parsed[2], context, config, expression)
+                    right = evaluate(parsed[3], context, config, expression)
+                except (TypeError, ValueError):
+                    try:
+                        left = evaluate(parsed[2], context, config, expression)
+                    except Exception as e:
+                        raise DRLTypeError(
+                            f"Error evaluating left operand: {str(e)}",
+                            expression,
+                            -1,
+                            "Left operand evaluation failed",
+                        )
+
+                    try:
+                        right = evaluate(parsed[3], context, config, expression)
+                    except Exception as e:
+                        raise DRLTypeError(
+                            f"Error evaluating right operand: {str(e)}",
+                            expression,
+                            -1,
+                            "Right operand evaluation failed",
+                        )
+
+                    raise DRLTypeError(
+                        f"Type error in operation: {left} {operator} {right}",
+                        expression,
+                        -1,
+                        f"Cannot perform '{operator}' on {type(left).__name__} and {type(right).__name__}",
+                    )
 
                 # Perform the operation
                 if operator == "+":
@@ -518,19 +705,35 @@ def evaluate(
                 elif operator == "*":
                     return left * right
                 elif operator == "/":
+                    if right == 0:
+                        raise DRLTypeError(
+                            "Division by zero", expression, -1, "Cannot divide by zero"
+                        )
                     return left / right
                 elif operator == "%":
+                    if right == 0:
+                        raise DRLTypeError(
+                            "Modulo by zero",
+                            expression,
+                            -1,
+                            "Cannot perform modulo with zero divisor",
+                        )
                     return left % right
                 elif operator == "^":
                     return left**right
                 else:
-                    raise ValueError(f"Unknown operator: {operator}")
+                    raise DRLSyntaxError(
+                        f"Unknown operator: {operator}",
+                        expression,
+                        -1,
+                        f"The operator '{operator}' is not supported",
+                    )
 
             # Comparison expression: ['COMPARISON', op, left, right]
             elif parsed[0] == "COMPARISON" and len(parsed) == 4:
                 operator = parsed[1]
-                left = evaluate(parsed[2], context, config)
-                right = evaluate(parsed[3], context, config)
+                left = evaluate(parsed[2], context, config, expression)
+                right = evaluate(parsed[3], context, config, expression)
 
                 # Perform comparison
                 if operator == "==":
@@ -546,13 +749,18 @@ def evaluate(
                 elif operator == ">=":
                     return left >= right
                 else:
-                    raise ValueError(f"Unknown comparison operator: {operator}")
+                    raise DRLSyntaxError(
+                        f"Unknown comparison operator: {operator}",
+                        expression,
+                        -1,
+                        f"The comparison operator '{operator}' is not supported",
+                    )
 
             # Logical expression: ['LOGICAL', op, left, right]
             elif parsed[0] == "LOGICAL" and len(parsed) == 4:
                 operator = parsed[1]
-                left = evaluate(parsed[2], context, config)
-                right = evaluate(parsed[3], context, config)
+                left = evaluate(parsed[2], context, config, expression)
+                right = evaluate(parsed[3], context, config, expression)
 
                 # Perform logical operation
                 if operator == "and":
@@ -560,22 +768,59 @@ def evaluate(
                 elif operator == "or":
                     return left or right
                 else:
-                    raise ValueError(f"Unknown logical operator: {operator}")
+                    raise DRLSyntaxError(
+                        f"Unknown logical operator: {operator}",
+                        expression,
+                        -1,
+                        f"The logical operator '{operator}' is not supported",
+                    )
 
             # Unary not: ['NOT', operand]
             elif parsed[0] == "NOT" and len(parsed) == 2:
-                operand = evaluate(parsed[1], context, config)
+                operand = evaluate(parsed[1], context, config, expression)
                 return not operand
 
             # Function call: [func_name, arg1, arg2, ...]
             else:
                 func_name = parsed[0]
-                args = [evaluate(arg, context, config) for arg in parsed[1:]]
+                try:
+                    args = [
+                        evaluate(arg, context, config, expression) for arg in parsed[1:]
+                    ]
+                except Exception as e:
+                    # Re-raise DRL errors as-is
+                    if isinstance(e, DRLError):
+                        raise
+                    # Wrap other errors
+                    raise DRLTypeError(
+                        f"Error evaluating argument for function '{func_name}': {str(e)}",
+                        expression,
+                        -1,
+                        f"Function: {func_name}",
+                    )
 
                 # Use the execute function from functions module to handle function calls
                 # This uses the FUNCTIONS registry and handles type conversion
                 # Pass config to access custom functions
-                return functions.execute(func_name, *args, config=config)
+                try:
+                    return functions.execute(func_name, *args, config=config)
+                except NameError as e:
+                    raise DRLNameError(
+                        str(e),
+                        expression,
+                        -1,
+                        f"Function '{func_name}' is not defined. Check spelling or register as custom function.",
+                    )
+                except Exception as e:
+                    # Re-raise DRL errors as-is
+                    if isinstance(e, DRLError):
+                        raise
+                    raise DRLTypeError(
+                        f"Error executing function '{func_name}': {str(e)}",
+                        expression,
+                        -1,
+                        f"Function: {func_name}, Arguments: {args}",
+                    )
 
     # Return as-is if we can't evaluate
     return parsed
@@ -594,6 +839,12 @@ def interpret(
     Returns:
         The result of evaluating the expression
 
+    Raises:
+        DRLSyntaxError: For syntax errors in the expression
+        DRLReferenceError: If a reference path cannot be resolved
+        DRLNameError: If a function is not found
+        DRLTypeError: For type-related errors
+
     Examples:
         >>> interpret('$root>timestamp', {'root': {'timestamp': 1234}})
         1234
@@ -610,8 +861,22 @@ def interpret(
     if config is None:
         config = DEFAULT_CONFIG
 
-    parsed = parse_line(line, config)
-    return evaluate(parsed, context, config)
+    try:
+        parsed = parse_line(line, config)
+        return evaluate(parsed, context, config, line)
+    except DRLError:
+        # Re-raise DRL errors as-is (they already have context)
+        raise
+    except KeyError as e:
+        # Convert KeyError to DRLReferenceError
+        raise DRLReferenceError(
+            f"Reference error: {str(e)}", line, -1, "Key not found in context"
+        )
+    except Exception as e:
+        # Wrap unexpected errors with context
+        raise DRLError(
+            f"Unexpected error: {str(e)}", line, -1, f"Error type: {type(e).__name__}"
+        )
 
 
 def interpret_dict(

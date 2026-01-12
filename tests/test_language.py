@@ -9,6 +9,7 @@ from drlang.language import (
     interpret,
     Token,
 )
+from drlang import DRLReferenceError, DRLTypeError, DRLNameError
 
 
 class TestTokenize:
@@ -84,12 +85,12 @@ class TestResolveReference:
 
     def test_resolve_missing_key(self):
         context = {"root": {}}
-        with pytest.raises(KeyError):
+        with pytest.raises(DRLReferenceError):
             resolve_reference("root>missing", context)
 
     def test_resolve_non_dict_value(self):
         context = {"root": "not a dict"}
-        with pytest.raises(TypeError):
+        with pytest.raises(DRLTypeError):
             resolve_reference("root>timestamp", context)
 
 
@@ -164,12 +165,12 @@ class TestInterpret:
 
     def test_interpret_missing_function(self):
         context = {"data": "value"}
-        with pytest.raises(NameError, match="Function 'nonexistent' not found"):
+        with pytest.raises(DRLNameError, match="Function 'nonexistent' not found"):
             interpret("nonexistent($data)", context)
 
     def test_interpret_missing_reference(self):
         context = {"root": {}}
-        with pytest.raises(KeyError):
+        with pytest.raises(DRLReferenceError):
             interpret("$root>missing", context)
 
     def test_interpret_complex_nested_data(self):
@@ -191,7 +192,7 @@ class TestEdgeCases:
     """Test edge cases and error handling."""
 
     def test_empty_context(self):
-        with pytest.raises(KeyError):
+        with pytest.raises(DRLReferenceError):
             interpret("$key", {})
 
     def test_whitespace_handling(self):
