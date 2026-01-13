@@ -118,6 +118,7 @@ class TestParseLine:
 
     def test_parse_function_multiple_args(self):
         result = parse_line("split($data>names, ',')")
+        assert isinstance(result, list)
         assert result[0] == "split"
         assert len(result) == 3
         assert result[1].type == "REFERENCE"
@@ -166,12 +167,12 @@ class TestInterpret:
     def test_interpret_missing_function(self):
         context = {"data": "value"}
         with pytest.raises(DRLNameError, match="Function 'nonexistent' not found"):
-            interpret("nonexistent($data)", context)
+            interpret("nonexistent(data)", context)
 
     def test_interpret_missing_reference(self):
         context = {"root": {}}
         with pytest.raises(DRLReferenceError):
-            interpret("$root>missing", context)
+            interpret("$(root>missing)", context)
 
     def test_interpret_complex_nested_data(self):
         context = {
@@ -193,7 +194,7 @@ class TestEdgeCases:
 
     def test_empty_context(self):
         with pytest.raises(DRLReferenceError):
-            interpret("$key", {})
+            interpret("$(key)", {})
 
     def test_whitespace_handling(self):
         context = {"key": "value"}

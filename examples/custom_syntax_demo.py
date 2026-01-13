@@ -15,7 +15,7 @@ user_data = {
 }
 
 print("=" * 60)
-print("DRL Custom Syntax Demo")
+print("DRLang Custom Syntax Demo")
 print("=" * 60)
 
 # Default syntax: $ and >

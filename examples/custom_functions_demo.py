@@ -1,7 +1,7 @@
-"""Example demonstrating custom user-provided functions in DRL.
+"""Example demonstrating custom user-provided functions in DRLang.
 
 This example shows how users can register their own custom functions
-to extend DRL's capabilities for domain-specific use cases.
+to extend DRLang's capabilities for domain-specific use cases.
 """
 
 from drlang import interpret, DRLConfig, register_function
@@ -145,7 +145,7 @@ def word_count(text):
 
 config = DRLConfig(custom_functions={"word_count": word_count})
 
-data = {"message": "Hello world from DRL"}
+data = {"message": "Hello world from DRLang"}
 
 # Use custom function with built-in if()
 expr = 'if(word_count($message) > 3, "long message", "short message")'

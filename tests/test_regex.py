@@ -1,6 +1,5 @@
 """Tests for regex functions in DRL."""
 
-import pytest
 from drlang import interpret
 
 

@@ -5,9 +5,9 @@
 
 **Dynamic Reference Language (DRLang)** - A powerful expression language for data processing and configuration management.
 
-DRL is a lightweight library that interprets string expressions to extract, process, and transform data from dictionary-like sources. It provides:
+DRLang is a lightweight library that interprets string expressions to extract, process, and transform data from dictionary-like sources. It provides:
 
-- 🔗 **Data References**: Access nested dictionary values with customizable syntax
+- 🔗 **Data References**: Three reference types for different behaviors: `$[ref]` optional, `$(ref)` required, `${ref}` literal fallback
 - 🧮 **Math Operations**: Full arithmetic support with proper operator precedence
 - 🔍 **Comparisons & Logic**: Compare values and combine conditions with `and`, `or`, `not`
 - ⚙️ **Conditional Logic**: Inline conditionals with the `if()` function
@@ -38,18 +38,46 @@ print(interpret("$user>name", data))  # "Alice"
 print(interpret("$user>age >= 18", data))  # True
 
 # Conditional logic
-expr = 'if($user>age >= 18, "adult", "minor")'
+expr = 'if $(user>age >= 18, "adult", "minor")'
 print(interpret(expr, data))  # "adult"
 
 # String functions
-print(interpret('upper($user>name)', data))  # "ALICE"
+print(interpret('upper $(user>name)', data))  # "ALICE"
 ```
+
+### Interactive CLI
+
+Test and debug expressions interactively:
+
+```bash
+# Start interactive shell
+drlang
+
+# With context data preloaded
+drlang -f data.json
+
+# Evaluate single expression
+drlang -c '$user>name' -f data.json
+
+# Custom syntax
+drlang --ref @ --delim .
+```
+
+**Interactive commands:**
+- `eval <expr>` - Evaluate expression (or just type the expression)
+- `set <key> <json>` - Add context data
+- `context` - View current context
+- `test <dict>` - Test multiple expressions
+- `functions` - List available functions
+- `help <function>` - Get function documentation
+- `examples` - Show usage examples
 
 -----
 
 ## Table of Contents
 
 - [Quick Start](#quick-start)
+- [Interactive CLI](#interactive-cli)
 - [Usage Examples](#usage-examples)
 - [Syntax](#syntax)
   - [Data References](#data-references)
@@ -77,7 +105,7 @@ import json
 source_data = json.load(open("my_file.json"))
 
 # Access nested values
-config_item = "print($root>timestamp)"
+config_item = "print $(root>timestamp)"
 drlang.interpret(config_item, source_data)
 # Prints the timestamp value
 ```
@@ -86,7 +114,7 @@ drlang.interpret(config_item, source_data)
 
 ```python
 source_data = json.load(open("map_locations.json"))
-config_item = "split($houses>Maryland City>occupants, ',')"
+config_item = "split $(houses>Maryland City>occupants, ',')"
 people = drlang.interpret(config_item, source_data)
 # Returns list of occupants
 ```
@@ -96,13 +124,13 @@ people = drlang.interpret(config_item, source_data)
 ```python
 # Calculate discounted price
 data = {"price": 100, "discount": 0.2, "quantity": 5}
-expr = "($price * (1 - $discount)) * $quantity"
+expr = "$(price * (1 - $discount)) * $quantity"
 total = drlang.interpret(expr, data)
 # Returns: 400.0
 
 # Conditional access control
 data = {"age": 25, "verified": True}
-expr = 'if($age >= 18 and $verified, "access granted", "access denied")'
+expr = 'if $(age >= 18 and $verified, "access granted", "access denied")'
 result = drlang.interpret(expr, data)
 # Returns: "access granted"
 ```
@@ -120,28 +148,268 @@ def calculate_shipping(weight, zone):
 config = DRLConfig(custom_functions={"shipping": calculate_shipping})
 
 data = {"weight": 3.5, "zone": "regional"}
-cost = interpret("shipping($weight, $zone)", data, config)
+cost = interpret("shipping $(weight, $zone)", data, config)
 # Returns: 11.75
+```
+
+## Interactive CLI
+
+DRLang includes a powerful command-line interface for testing expressions, debugging, and exploring functions.
+
+### Quick Start
+
+```bash
+# Start interactive shell
+drlang
+
+# With context data preloaded
+drlang -f data.json
+
+# Evaluate single expression
+drlang -c '$user>name' -f data.json
+
+# Custom syntax
+drlang --ref @ --delim .
+```
+
+### Interactive Commands
+
+Once in the shell, you can use these commands:
+
+**Expression Evaluation:**
+```
+drlang> $user>name
+=> 'Alice'
+
+drlang> $user>age * 2
+=> 60
+
+drlang> if($user>age >= 18, "adult", "minor")
+=> 'adult'
+```
+
+**Context Management:**
+```
+drlang> set user {"name": "Alice", "age": 30}
+Set user = {'name': 'Alice', 'age': 30}
+
+drlang> context
+Current context:
+{
+  "user": {"name": "Alice", "age": 30}
+}
+
+drlang> context load data.json
+Loaded context from data.json
+
+drlang> context clear
+Context cleared
+```
+
+**Batch Testing:**
+```
+drlang> test {"name": "$user>name", "adult": "$user>age >= 18"}
+Testing expressions:
+======================================================================
+name                 $user>name                    => 'Alice'
+adult                $user>age >= 18               => True
+======================================================================
+
+drlang> test file expressions.json
+(Tests all expressions from the JSON file)
+```
+
+**Function Discovery:**
+```
+drlang> functions
+Available functions (40):
+
+String:
+  • split  • upper  • lower  • capitalize  • strip  • replace
+
+Math:
+  • max  • min  • int  • float  • abs  • round
+...
+
+drlang> functions regex
+Available functions (6):
+Regex:
+  • regex_search  • regex_match  • regex_findall
+  • regex_sub  • regex_split  • regex_extract
+
+drlang> help split
+Function: split
+======================================================================
+Signature: split(sep=None, maxsplit=-1)
+
+Split string by separator...
+```
+
+**Configuration:**
+```
+drlang> config set @ .
+Set custom config: @ and .
+
+drlang> @user.name
+=> 'Alice'
+
+drlang> config reset
+Reset to default config ($ and >)
+```
+
+### Command-Line Options
+
+```bash
+# Evaluate expression and exit
+drlang -c 'upper("hello")'
+# Output: HELLO
+
+# With context file
+drlang -f data.json -c '$user>email'
+# Output: alice@example.com
+
+# Custom syntax
+drlang --ref @ --delim . -c '@user.name' -f data.json
+
+# Show help
+drlang --help
+```
+
+### Batch Testing with Files
+
+Create `expressions.json`:
+```json
+{
+  "user_name": "$user>name",
+  "is_adult": "$user>age >= 18",
+  "greeting": "upper($user>name)"
+}
+```
+
+Test all expressions:
+```bash
+drlang -f data.json
+drlang> test file expressions.json
+```
+
+Or programmatically:
+```python
+from drlang import interpret_dict
+import json
+
+with open('data.json') as f:
+    context = json.load(f)
+with open('expressions.json') as f:
+    expressions = json.load(f)
+
+results = interpret_dict(expressions, context)
 ```
 
 ## Syntax
 
-DRL supports the following language features:
+DRLang supports the following language features:
 
 ### Data References
 
-Access values from the context dictionary using the reference indicator (`$` by default) followed by keys separated by the key delimiter (`>` by default):
+DRLang supports three types of data references, each with different behavior when a key is missing:
+
+#### Optional References `$[ref]`
+
+Optional references return `None` when a key is missing instead of raising an error. This enables safe navigation and default value patterns:
 
 ```python
-drlang.interpret("$root>user>name", {"root": {"user": {"name": "Alice"}}})
+data = {"user": {"name": "Alice"}}
+
+# Returns "Alice" when key exists
+drlang.interpret("$[user>name]", data)
 # Returns: "Alice"
+
+# Returns None when key is missing (no error)
+drlang.interpret("$[user>age]", data)
+# Returns: None
+
+# Safe navigation through missing paths
+drlang.interpret("$[user>profile>bio]", data)
+# Returns: None
 ```
 
-Keys with spaces are supported:
+**Use cases for optional references:**
+- Providing default values: `if($[user>age], $[user>age], 18)`
+- Safe navigation: Check if paths exist without errors
+- Optional configuration: `if($[config>debug], "debug mode", "production")`
+
+#### Required References `$(ref)`
+
+Required references raise a `DRLReferenceError` when a key is missing. Use these for mandatory data that must exist:
 
 ```python
-drlang.interpret("$user info>full name", {"user info": {"full name": "Bob Smith"}})
+data = {"config": {"api_key": "secret123"}}
+
+# Returns value when key exists
+drlang.interpret("$(config>api_key)", data)
+# Returns: "secret123"
+
+# Raises DRLReferenceError when key is missing
+drlang.interpret("$(config>database_url)", data)
+# Raises: DRLReferenceError
+```
+
+**Use cases for required references:**
+- Validating critical configuration exists
+- Ensuring mandatory fields are present
+- Failing fast when required data is missing
+
+#### Literal Fallback References `${ref}`
+
+Literal references return the original reference string when a key is missing. This is useful for template strings where you want to preserve placeholders:
+
+```python
+data = {"user": {"name": "Bob"}}
+
+# Returns value when key exists
+drlang.interpret("${user>name}", data)
+# Returns: "Bob"
+
+# Returns the reference string when key is missing
+drlang.interpret("${user>age}", data)
+# Returns: "$user>age"
+
+# Template example
+drlang.interpret('"${user>name} is(${user>age} years old"', data)
+# Returns: "Bob is $user>age years old"
+```
+
+**Use cases for literal fallback:**
+- Template strings where missing values should remain as placeholders
+- Configuration files that may be partially filled
+- Debugging (see which references are missing)
+
+#### Mixed References
+
+Combine different reference types in the same expression:
+
+```python
+data = {"user": {"name": "Bob"}}
+
+# Check with optional, access with required
+expr = 'if($[user>verified], ($user>name), "unverified")'
+drlang.interpret(expr, data)
+# Returns: "unverified" (verified is optional, doesn't exist)
+```
+
+#### Keys with Spaces
+
+All reference types support keys containing spaces:
+
+```python
+drlang.interpret("$[user info>full name]", {"user info": {"full name": "Bob Smith"}})
 # Returns: "Bob Smith"
+
+drlang.interpret("$(company name)", {"company name": "ACME Corp"})
+# Returns: "ACME Corp"
+
+drlang.interpret("${missing key}", {})
+# Returns: "$missing key"
 ```
 
 ### Mathematical Operators
@@ -159,7 +427,7 @@ DRLang supports standard mathematical operators with proper precedence:
 drlang.interpret("$x + $y * 2", {"x": 10, "y": 5})
 # Returns: 20 (following order of operations: 10 + 5*2)
 
-drlang.interpret("($x + $y) * 2", {"x": 10, "y": 5})
+drlang.interpret("$(x + $y) * 2", {"x": 10, "y": 5})
 # Returns: 30 (parentheses override precedence)
 
 drlang.interpret("2 ^ 3", {})
@@ -171,17 +439,17 @@ drlang.interpret("2 ^ 3", {})
 Call built-in functions using function names followed by arguments in parentheses:
 
 ```python
-drlang.interpret('split($data, ",")', {"data": "a,b,c"})
+drlang.interpret('split $(data, ",")', {"data": "a,b,c"})
 # Returns: ["a", "b", "c"]
 
-drlang.interpret("max($x, $y)", {"x": 10, "y": 20})
+drlang.interpret("max $(x, $y)", {"x": 10, "y": 20})
 # Returns: 20
 ```
 
 Functions can be nested and combined with operators:
 
 ```python
-drlang.interpret("len($name) * 2", {"name": "Alice"})
+drlang.interpret("len $(name) * 2", {"name": "Alice"})
 # Returns: 10 (len("Alice") = 5, 5 * 2 = 10)
 ```
 
@@ -238,16 +506,16 @@ drlang.interpret("True or False and False", {})
 Use the `if()` function for conditional expressions:
 
 ```python
-drlang.interpret('if($score >= 60, "pass", "fail")', {"score": 75})
+drlang.interpret('if $(score >= 60, "pass", "fail")', {"score": 75})
 # Returns: "pass"
 
 # Nested conditions
-expr = 'if($score >= 90, "A", if($score >= 80, "B", "C"))'
+expr = 'if $(score >= 90, "A", if($score >= 80, "B", "C"))'
 drlang.interpret(expr, {"score": 85})
 # Returns: "B"
 
 # Complex conditions
-expr = 'if($age >= 18 and $verified, "access granted", "access denied")'
+expr = 'if $(age >= 18 and $verified, "access granted", "access denied")'
 drlang.interpret(expr, {"age": 25, "verified": True})
 # Returns: "access granted"
 ```
@@ -308,7 +576,7 @@ def celsius_to_fahrenheit(celsius):
 # Register via config
 config = DRLConfig(custom_functions={'c_to_f': celsius_to_fahrenheit})
 
-result = interpret('c_to_f($temp)', {'temp': 25}, config)
+result = interpret('c_to_f $(temp)', {'temp': 25}, config)
 # Returns: 77.0
 ```
 
@@ -325,7 +593,7 @@ def discount(price, percent):
 
 register_function('discount', discount, config)
 
-result = interpret('discount($price, 20)', {'price': 100}, config)
+result = interpret('discount $(price, 20)', {'price': 100}, config)
 # Returns: 80.0
 ```
 
@@ -357,12 +625,12 @@ config = DRLConfig(custom_functions={
 })
 
 # Use in complex expressions
-expr = 'if(is_valid($age), double($age), 0)'
+expr = 'if(is_valid $(age), double $(age), 0)'
 result = interpret(expr, {'age': 30}, config)
 # Returns: 60
 
 # Combine with built-in functions
-expr = 'max(clamp($value, 0, 100), 50)'
+expr = 'max(clamp $(value, 0, 100), 50)'
 result = interpret(expr, {'value': 150}, config)
 # Returns: 100
 ```
@@ -384,7 +652,7 @@ config = DRLConfig(custom_functions={
 
 # Calculate final price
 data = {'price': 100, 'tier': 'gold', 'tax_rate': 0.08}
-expr = 'tax(discount($price, $tier), $tax_rate)'
+expr = 'tax(discount $(price, $tier), $tax_rate)'
 final_price = interpret(expr, data, config)
 # Returns: 91.8 (100 * 0.85 * 1.08)
 ```
@@ -432,7 +700,7 @@ Reference key 'age' not found in context
 **Unterminated string:**
 ```python
 try:
-    interpret('split($data, "comma)', {"data": "a,b,c"})
+    interpret('split $(data, "comma)', {"data": "a,b,c"})
 except DRLSyntaxError as e:
     print(e)
 ```
@@ -441,9 +709,9 @@ Output:
 ```
 Unterminated string literal starting with "
 
-  Expression: split($data, "comma)
+  Expression: split $(data, "comma)
   Position 13:
-    split($data, "comma)
+    split $(data, "comma)
                  ^
   Context: String started at position 13 but never closed
 ```

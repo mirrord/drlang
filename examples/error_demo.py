@@ -2,7 +2,6 @@
 
 from drlang import (
     interpret,
-    DRLConfig,
     DRLReferenceError,
     DRLNameError,
     DRLSyntaxError,
@@ -10,7 +9,7 @@ from drlang import (
 )
 
 print("=" * 70)
-print("DRL Verbose Error Messages Demo")
+print("DRLang Verbose Error Messages Demo")
 print("=" * 70)
 
 # Example 1: Missing reference key

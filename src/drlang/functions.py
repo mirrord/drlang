@@ -1,4 +1,3 @@
-# this module contains the functions available in DRL scripts.
 import builtins
 import inspect
 import re

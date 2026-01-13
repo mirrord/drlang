@@ -1,4 +1,3 @@
-# this module contains the logic for the DRL language.
 from typing import Any, Dict, List, Union, Optional, Callable
 import drlang.functions as functions
 
@@ -115,11 +114,14 @@ DEFAULT_CONFIG = DRLConfig()
 class Token:
     """Represents a token in a DRL expression."""
 
-    def __init__(self, type_: str, value: str):
+    def __init__(self, type_: str, value: str, behavior: str = "required"):
         self.type = type_
         self.value = value
+        self.behavior = behavior  # For REFERENCE tokens: 'required' (), 'optional' [], 'passthrough' {}
 
     def __repr__(self):
+        if self.type == "REFERENCE" and hasattr(self, "behavior"):
+            return f"Token({self.type}, {self.value!r}, behavior={self.behavior})"
         return f"Token({self.type}, {self.value!r})"
 
 
@@ -154,89 +156,132 @@ def tokenize(expression: str, config: Optional[DRLConfig] = None) -> List[Token]
             i += 1
             continue
 
-        # Data reference: {ref_indicator}key{key_delimiter}nested{key_delimiter}path
+        # Data reference: {ref_indicator}(path) or {ref_indicator}[path] or {ref_indicator}{path}
+        # () = required (throw exception), [] = optional (return None), {} = passthrough (return original)
         if expression[i] == config.ref_indicator:
-            i += 1
+            ref_start = i
+            i += 1  # Skip the $ character
+
+            # Determine behavior based on delimiter after $
+            behavior = "required"  # Default
+            closing_delimiter = None
+
+            if i < len(expression):
+                if expression[i] == "(":
+                    behavior = "required"
+                    closing_delimiter = ")"
+                    i += 1  # Skip opening delimiter
+                elif expression[i] == "[":
+                    behavior = "optional"
+                    closing_delimiter = "]"
+                    i += 1  # Skip opening delimiter
+                elif expression[i] == "{":
+                    behavior = "passthrough"
+                    closing_delimiter = "}"
+                    i += 1  # Skip opening delimiter
+
             ref = ""
-            # Collect reference path (can include spaces in keys)
-            # Stop at operators, comparison operators, delimiters, and quotes
-            base_stop_chars = "(),'\"+-*/%^<>=!"
-            # Remove key_delimiter from stop_chars if it's in there
-            stop_chars = "".join(
-                c for c in base_stop_chars if c != config.key_delimiter
-            )
-            stop_chars += config.ref_indicator
+            # Collect reference path until closing delimiter or stop chars
+            if closing_delimiter:
+                # Parse until closing delimiter
+                while i < len(expression) and expression[i] != closing_delimiter:
+                    ref += expression[i]
+                    i += 1
+                if i >= len(expression):
+                    raise DRLSyntaxError(
+                        f"Unterminated reference: expected closing '{closing_delimiter}'",
+                        original_expression,
+                        ref_start,
+                        f"Reference started at position {ref_start} but never closed",
+                    )
+                i += 1  # Skip closing delimiter
+            else:
+                # Old-style reference without delimiters (for backward compatibility)
+                # Collect reference path (can include spaces in keys)
+                # Stop at operators, comparison operators, delimiters, and quotes
+                base_stop_chars = "(),'\"+-*/%^<>=![]{}"
+                # Remove key_delimiter from stop_chars if it's in there
+                stop_chars = "".join(
+                    c for c in base_stop_chars if c != config.key_delimiter
+                )
+                stop_chars += config.ref_indicator
 
-            while i < len(expression):
-                # Special handling for key_delimiter when it might also be a comparison operator
-                if (
-                    expression[i] == config.key_delimiter
-                    and config.key_delimiter in "<>="
-                ):
-                    # Check if this is a comparison operator or a key delimiter
-                    # It's a comparison operator if:
-                    # 1. Followed by space, end of string, or another operator char (like = for >=)
-                    # 2. Not followed by a valid identifier character
-                    next_pos = i + 1
-                    if next_pos >= len(expression):
-                        # End of expression, this is a comparison operator
-                        break
-                    next_char = expression[next_pos]
-                    if next_char.isspace() or next_char in "=!<>(),'\"+-*/%^":
-                        # This is a comparison operator, not a key delimiter
-                        break
-                    # Otherwise, it's a key delimiter, continue collecting the reference
-
-                # Stop at stop characters
-                if expression[i] in stop_chars:
-                    break
-
-                # If we hit a space, peek ahead to see what comes next
-                if expression[i].isspace():
-                    # Look ahead past whitespace
-                    j = i + 1
-                    while j < len(expression) and expression[j].isspace():
-                        j += 1
-
-                    if j < len(expression):
-                        # Stop if next non-space char is a stop character
-                        if expression[j] in stop_chars:
-                            # Don't include this space
+                while i < len(expression):
+                    # Special handling for key_delimiter when it might also be a comparison operator
+                    if (
+                        expression[i] == config.key_delimiter
+                        and config.key_delimiter in "<>="
+                    ):
+                        # Check if this is a comparison operator or a key delimiter
+                        # It's a comparison operator if:
+                        # 1. Followed by space, end of string, or another operator char (like = for >=)
+                        # 2. Not followed by a valid identifier character
+                        next_pos = i + 1
+                        if next_pos >= len(expression):
+                            # End of expression, this is a comparison operator
                             break
+                        next_char = expression[next_pos]
+                        if next_char.isspace() or next_char in "=!<>(),'\"+-*/%^":
+                            # This is a comparison operator, not a key delimiter
+                            break
+                        # Otherwise, it's a key delimiter, continue collecting the reference
 
-                        # Check for comparison operators that might have been removed from stop_chars
-                        if (
-                            config.key_delimiter in "<>="
-                            and expression[j] == config.key_delimiter
-                        ):
-                            # Peek ahead to see if it's a comparison operator
-                            next_pos = j + 1
-                            if next_pos >= len(expression):
-                                break
-                            next_char = expression[next_pos]
-                            if next_char.isspace() or next_char in "=!<>(),'\"+-*/%^":
+                    # Stop at stop characters
+                    if expression[i] in stop_chars:
+                        break
+
+                    # If we hit a space, peek ahead to see what comes next
+                    if expression[i].isspace():
+                        # Look ahead past whitespace
+                        j = i + 1
+                        while j < len(expression) and expression[j].isspace():
+                            j += 1
+
+                        if j < len(expression):
+                            # Stop if next non-space char is a stop character
+                            if expression[j] in stop_chars:
+                                # Don't include this space
                                 break
 
-                        # Stop if next word is a logical keyword
-                        if j + 3 <= len(expression) and expression[j : j + 3] in [
-                            "and",
-                            "not",
-                        ]:
+                            # Check for comparison operators that might have been removed from stop_chars
                             if (
-                                j + 3 == len(expression)
-                                or not expression[j + 3].isalnum()
+                                config.key_delimiter in "<>="
+                                and expression[j] == config.key_delimiter
                             ):
-                                break
-                        if j + 2 <= len(expression) and expression[j : j + 2] == "or":
-                            if (
-                                j + 2 == len(expression)
-                                or not expression[j + 2].isalnum()
-                            ):
-                                break
+                                # Peek ahead to see if it's a comparison operator
+                                next_pos = j + 1
+                                if next_pos >= len(expression):
+                                    break
+                                next_char = expression[next_pos]
+                                if (
+                                    next_char.isspace()
+                                    or next_char in "=!<>(),'\"+-*/%^"
+                                ):
+                                    break
 
-                ref += expression[i]
-                i += 1
-            tokens.append(Token("REFERENCE", ref.strip()))
+                            # Stop if next word is a logical keyword
+                            if j + 3 <= len(expression) and expression[j : j + 3] in [
+                                "and",
+                                "not",
+                            ]:
+                                if (
+                                    j + 3 == len(expression)
+                                    or not expression[j + 3].isalnum()
+                                ):
+                                    break
+                            if (
+                                j + 2 <= len(expression)
+                                and expression[j : j + 2] == "or"
+                            ):
+                                if (
+                                    j + 2 == len(expression)
+                                    or not expression[j + 2].isalnum()
+                                ):
+                                    break
+
+                    ref += expression[i]
+                    i += 1
+            tokens.append(Token("REFERENCE", ref.strip(), behavior=behavior))
             continue
 
         # String literal
@@ -393,6 +438,8 @@ def resolve_reference(
     config: Optional[DRLConfig] = None,
     expression: str = "",
     position: int = -1,
+    behavior: str = "required",
+    original_ref: str = "",
 ) -> Any:
     """Resolve a data reference like 'root>timestamp' from context dict.
 
@@ -402,13 +449,15 @@ def resolve_reference(
         config: Optional DRLConfig with custom key delimiter
         expression: The full expression being parsed (for error reporting)
         position: Position in expression (for error reporting)
+        behavior: How to handle missing keys - 'required' (raise error), 'optional' (return None), 'passthrough' (return original string)
+        original_ref: The original reference string for passthrough behavior
 
     Returns:
-        The resolved value
+        The resolved value, None if optional and key not found, or original string if passthrough and key not found
 
     Raises:
-        DRLReferenceError: If the reference path doesn't exist
-        DRLTypeError: If trying to navigate into a non-dict value
+        DRLReferenceError: If the reference path doesn't exist (and behavior is 'required')
+        DRLTypeError: If trying to navigate into a non-dict value (and behavior is 'required')
     """
     if config is None:
         config = DEFAULT_CONFIG
@@ -423,6 +472,11 @@ def resolve_reference(
 
         if isinstance(value, dict):
             if part not in value:
+                if behavior == "optional":
+                    return None  # Return None for optional references
+                elif behavior == "passthrough":
+                    return original_ref  # Return original string for passthrough references
+                # behavior == "required" - raise error
                 available_keys = list(value.keys())[:5]  # Show up to 5 keys
                 key_hint = (
                     f"Available keys: {available_keys}"
@@ -437,6 +491,11 @@ def resolve_reference(
                 )
             value = value[part]
         else:
+            if behavior == "optional":
+                return None  # Return None for optional references
+            elif behavior == "passthrough":
+                return original_ref  # Return original string for passthrough references
+            # behavior == "required" - raise error
             raise DRLTypeError(
                 f"Cannot navigate into non-dict value at key '{part}'",
                 expression,
@@ -639,7 +698,13 @@ def evaluate(
     # Handle Token directly
     if isinstance(parsed, Token):
         if parsed.type == "REFERENCE":
-            return resolve_reference(parsed.value, context, config, expression, -1)
+            # Pass the behavior from the token
+            behavior = getattr(parsed, "behavior", "required")
+            # Construct original reference string for passthrough behavior
+            original_ref = f"{config.ref_indicator}{parsed.value}"
+            return resolve_reference(
+                parsed.value, context, config, expression, -1, behavior, original_ref
+            )
         elif parsed.type == "STRING":
             return parsed.value
         elif parsed.type == "NUMBER":

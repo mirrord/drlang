@@ -1,4 +1,4 @@
-"""Example demonstrating regex functions in DRL.
+"""Example demonstrating regex functions in DRLang.
 
 This example shows how to use regex functions for pattern matching,
 text extraction, and data validation.
@@ -7,7 +7,7 @@ text extraction, and data validation.
 from drlang import interpret
 
 print("=" * 70)
-print("DRL Regex Functions Demo")
+print("DRLang Regex Functions Demo")
 print("=" * 70)
 
 # Example 1: Validating data formats
@@ -187,20 +187,21 @@ server_log = {
 }
 
 # Extract HTTP method
-method = interpret(r'regex_extract("^(\w+)\s", $request, 1)', server_log)
+method = interpret(r'regex_extract("^(\\w+)\\s", $request, 1)', server_log)
 print(f"HTTP Method: {method}")
 
 # Extract user ID
-user_id = interpret(r'regex_extract("/users/(\d+)", $request, 1)', server_log)
+user_id = interpret(r'regex_extract("/users/(\\d+)", $request, 1)', server_log)
 print(f"User ID: {user_id}")
 
 # Extract all IP addresses
-ips = interpret(r'regex_findall("\d+\.\d+\.\d+\.\d+", $ip_log)', server_log)
+ips = interpret(r'regex_findall("\\d+\\.\\d+\\.\\d+\\.\\d+", $ip_log)', server_log)
 print(f"IP Addresses: {ips}")
 
 # Extract ISO timestamp
 timestamp = interpret(
-    r'regex_extract("\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}", $timestamp)', server_log
+    r'regex_extract("\\d{4}-\\d{2}-\\d{2}T\\d{2}:\\d{2}:\\d{2}", $timestamp)',
+    server_log,
 )
 print(f"Timestamp: {timestamp}")
 
@@ -211,7 +212,7 @@ print("-" * 70)
 data = {"text": "Prices: $10.50, $25.99, $5.00, $100.00"}
 
 # Extract prices, convert to float, calculate total
-prices_str = interpret(r'regex_findall("\$[\d.]+", $text)', data)
+prices_str = interpret(r'regex_findall("\\$[\\d.]+", $text)', data)
 print(f"Found prices: {prices_str}")
 
 # Clean and convert (need to do this programmatically in Python)
