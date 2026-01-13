@@ -79,6 +79,7 @@ class DRLConfig:
         ref_indicator: str = "$",
         key_delimiter: str = ">",
         custom_functions: Optional[Dict[str, Callable]] = None,
+        drop_empty: bool = False,
     ):
         """Initialize DRL configuration.
 
@@ -86,6 +87,7 @@ class DRLConfig:
             ref_indicator: Symbol to indicate data references (default: '$')
             key_delimiter: Symbol to separate nested keys (default: '>')
             custom_functions: Optional dict of custom functions to register {name: Callable}
+            drop_empty: If True, interpret_dict will exclude keys with None values (default: False)
         """
         # Validate that reference indicator doesn't conflict with critical syntax
         # Key delimiters are only used within references so they're more flexible
@@ -105,6 +107,7 @@ class DRLConfig:
         self.ref_indicator = ref_indicator
         self.key_delimiter = key_delimiter
         self.custom_functions = custom_functions or {}
+        self.drop_empty = drop_empty
 
 
 # Default configuration
@@ -490,6 +493,35 @@ def resolve_reference(
                     f"Failed at: {config.key_delimiter.join(path_so_far)}\n  {key_hint}",
                 )
             value = value[part]
+        elif isinstance(value, (list, tuple)):
+            # Support list/tuple indexing with integer keys
+            try:
+                index = int(part)
+                if -len(value) <= index < len(value):
+                    value = value[index]
+                else:
+                    if behavior == "optional":
+                        return None
+                    elif behavior == "passthrough":
+                        return original_ref
+                    raise DRLReferenceError(
+                        f"List index {index} out of range",
+                        expression,
+                        position,
+                        f"List at '{config.key_delimiter.join(path_so_far[:-1])}' has length {len(value)}",
+                    )
+            except ValueError:
+                # Not an integer - can't index list with non-integer
+                if behavior == "optional":
+                    return None
+                elif behavior == "passthrough":
+                    return original_ref
+                raise DRLTypeError(
+                    f"Cannot use non-integer key '{part}' to index {type(value).__name__}",
+                    expression,
+                    position,
+                    f"Value at '{config.key_delimiter.join(path_so_far[:-1])}' is a {type(value).__name__}, requires integer index",
+                )
         else:
             if behavior == "optional":
                 return None  # Return None for optional references
@@ -497,10 +529,10 @@ def resolve_reference(
                 return original_ref  # Return original string for passthrough references
             # behavior == "required" - raise error
             raise DRLTypeError(
-                f"Cannot navigate into non-dict value at key '{part}'",
+                f"Cannot navigate into non-dict/non-list value at key '{part}'",
                 expression,
                 position,
-                f"Value at '{config.key_delimiter.join(path_so_far[:-1])}' is {type(value).__name__}, not a dictionary",
+                f"Value at '{config.key_delimiter.join(path_so_far[:-1])}' is {type(value).__name__}, not a dictionary or list",
             )
 
     return value
@@ -945,31 +977,39 @@ def interpret(
 
 
 def interpret_dict(
-    expressions: Dict[str, str],
+    expressions: Dict[str, Any],
     context: Dict[str, Any],
     config: Optional[DRLConfig] = None,
 ) -> Dict[str, Any]:
     """Interpret multiple DRL expressions from a dictionary.
 
     Args:
-        expressions: A dictionary mapping keys to DRL expression strings
+        expressions: A dictionary mapping keys to DRL expression strings or nested dictionaries/lists
         context: The data dictionary to resolve references from
-        config: Optional DRLConfig for custom syntax symbols
+        config: Optional DRLConfig for custom syntax symbols (includes drop_empty flag)
     Returns:
-        A dictionary mapping keys to evaluated results
+        A dictionary mapping keys to evaluated results (excludes None values if config.drop_empty is True)
     """
+    if config is None:
+        config = DEFAULT_CONFIG
+
     results = {}
     for key, expr in expressions.items():
         if isinstance(expr, dict):
             # Recursively handle nested dictionaries
-            results[key] = interpret_dict(expr, context, config)
+            value = interpret_dict(expr, context, config)
         elif isinstance(expr, list):
             # Handle lists of expressions
-            results[key] = [
+            value = [
                 interpret(item, context, config) if isinstance(item, str) else item
                 for item in expr
             ]
         else:
             # Interpret single expressions
-            results[key] = interpret(expr, context, config)
+            value = interpret(expr, context, config)
+
+        # Only include in results if not None, or if drop_empty is False
+        if not config.drop_empty or value is not None:
+            results[key] = value
+
     return results

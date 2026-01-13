@@ -11,7 +11,8 @@ DRLang is a lightweight library that interprets string expressions to extract, p
 - 🧮 **Math Operations**: Full arithmetic support with proper operator precedence
 - 🔍 **Comparisons & Logic**: Compare values and combine conditions with `and`, `or`, `not`
 - ⚙️ **Conditional Logic**: Inline conditionals with the `if()` function
-- 📦 **40+ Built-in Functions**: String manipulation, math, random, date/time, and more
+- � **List Operations**: Index lists, manipulate with 9 functions, iterate with map/filter/reduce
+- �📦 **40+ Built-in Functions**: String manipulation, math, random, date/time, and more
 - 🎨 **Custom Syntax**: Tailor the syntax to match your preferred style
 - 🔧 **Custom Functions**: Extend with your own domain-specific functions
 - 📝 **Type Safety**: Automatic type conversion based on function signatures
@@ -85,9 +86,11 @@ drlang --ref @ --delim .
   - [Comparison Operators](#comparison-operators)
   - [Logical Operators](#logical-operators)
   - [Conditional Logic](#conditional-logic)
+  - [List Operations](#list-operations)
   - [Function Calls](#function-calls)
 - [Custom Syntax](#custom-syntax)
 - [Custom Functions](#custom-functions)
+- [Batch Processing with drop_empty](#batch-processing-with-drop_empty)
 - [Error Handling](#error-handling)
 - [Available Functions](#available-functions)
 - [Installation](#installation)
@@ -294,7 +297,7 @@ drlang> test file expressions.json
 
 Or programmatically:
 ```python
-from drlang import interpret_dict
+from drlang import interpret_dict, DRLConfig
 import json
 
 with open('data.json') as f:
@@ -302,8 +305,15 @@ with open('data.json') as f:
 with open('expressions.json') as f:
     expressions = json.load(f)
 
+# Default: includes all keys (even with None values)
 results = interpret_dict(expressions, context)
+
+# With drop_empty=True: excludes keys with None values
+config = DRLConfig(drop_empty=True)
+results = interpret_dict(expressions, context, config)
 ```
+
+See [Batch Processing with drop_empty](#batch-processing-with-drop_empty) for more details on filtering None values.
 
 ## Syntax
 
@@ -520,6 +530,277 @@ drlang.interpret(expr, {"age": 25, "verified": True})
 # Returns: "access granted"
 ```
 
+### List Operations
+
+DRLang provides comprehensive support for working with lists, including direct indexing, manipulation functions, and functional programming operations.
+
+#### List Indexing
+
+Access list elements directly through references using integer indices:
+
+```python
+data = {"items": ["apple", "banana", "cherry"]}
+
+# Access by index
+drlang.interpret("$items>0", data)
+# Returns: "apple"
+
+drlang.interpret("$items>2", data)
+# Returns: "cherry"
+```
+
+**Nested lists:**
+
+```python
+data = {"matrix": [[1, 2, 3], [4, 5, 6], [7, 8, 9]]}
+
+# Navigate nested structure
+drlang.interpret("$matrix>1>1", data)
+# Returns: 5
+
+drlang.interpret("$matrix>0>2", data)
+# Returns: 3
+```
+
+**Mixed dictionaries and lists:**
+
+```python
+data = {
+    "users": [
+        {"name": "Alice", "age": 30},
+        {"name": "Bob", "age": 25}
+    ]
+}
+
+drlang.interpret("$users>0>name", data)
+# Returns: "Alice"
+
+drlang.interpret("$users>1>age", data)
+# Returns: 25
+```
+
+**Negative indices** (using variables to avoid parser issues):
+
+```python
+data = {"items": ["a", "b", "c"], "last": -1}
+
+# Use list_get function for negative indices
+drlang.interpret("list_get($items, $last)", data)
+# Returns: "c"
+```
+
+#### List Manipulation Functions
+
+DRLang includes 9 functions for working with lists:
+
+**list_get(list, index, default=None)** - Safe element access:
+
+```python
+data = {"nums": [1, 2, 3, 4, 5]}
+
+drlang.interpret("list_get($nums, 2)", data)
+# Returns: 3
+
+drlang.interpret("list_get($nums, 10, 'N/A')", data)
+# Returns: "N/A"
+```
+
+**list_slice(list, start, end, step=1)** - Extract subsequence:
+
+```python
+drlang.interpret("list_slice($nums, 1, 4)", data)
+# Returns: [2, 3, 4]
+
+drlang.interpret("list_slice($nums, 0, 5, 2)", data)
+# Returns: [1, 3, 5]
+```
+
+**list_append(list, item)** - Add element (returns new list):
+
+```python
+drlang.interpret("list_append($nums, 6)", data)
+# Returns: [1, 2, 3, 4, 5, 6]
+```
+
+**list_concat(list1, list2)** - Merge lists:
+
+```python
+data = {"nums": [1, 2, 3], "more": [4, 5, 6]}
+drlang.interpret("list_concat($nums, $more)", data)
+# Returns: [1, 2, 3, 4, 5, 6]
+```
+
+**list_contains(list, item)** - Check membership:
+
+```python
+drlang.interpret("list_contains($nums, 3)", data)
+# Returns: True
+
+drlang.interpret("list_contains($nums, 10)", data)
+# Returns: False
+```
+
+**list_index(list, item, default=None)** - Find position:
+
+```python
+drlang.interpret("list_index($nums, 4)", data)
+# Returns: 3
+
+data["not_found"] = -1
+drlang.interpret("list_index($nums, 99, $not_found)", data)
+# Returns: -1
+```
+
+**list_reverse(list)** - Reverse order:
+
+```python
+drlang.interpret("list_reverse($nums)", data)
+# Returns: [5, 4, 3, 2, 1]
+```
+
+**list_unique(list)** - Remove duplicates:
+
+```python
+data = {"dupes": [1, 2, 2, 3, 1, 4, 3]}
+drlang.interpret("list_unique($dupes)", data)
+# Returns: [1, 2, 3, 4]
+```
+
+**list_flatten(list)** - Flatten one level:
+
+```python
+data = {"nested": [[1, 2], [3, 4], [5]]}
+drlang.interpret("list_flatten($nested)", data)
+# Returns: [1, 2, 3, 4, 5]
+```
+
+#### Iteration Functions
+
+DRLang provides powerful functional programming operations for transforming lists. These functions use special variables `$item` (current element) and `$index` (position) within their expressions.
+
+**map(expression, list)** - Transform each element:
+
+```python
+data = {"nums": [1, 2, 3, 4]}
+
+# Double each number
+drlang.interpret('map("$item * 2", $nums)', data)
+# Returns: [2, 4, 6, 8]
+
+# Uppercase strings
+data = {"words": ["hello", "world"]}
+drlang.interpret('map("upper($item)", $words)', data)
+# Returns: ["HELLO", "WORLD"]
+
+# Using index
+data = {"nums": [10, 20, 30]}
+drlang.interpret('map("$item + $index", $nums)', data)
+# Returns: [10, 21, 32]  # (10+0, 20+1, 30+2)
+
+# Complex expressions
+data = {"nums": [1, 2, 3, 4, 5]}
+expr = 'map("if($item > 3, $item * 10, $item)", $nums)'
+drlang.interpret(expr, data)
+# Returns: [1, 2, 3, 40, 50]
+```
+
+**filter(expression, list)** - Select elements:
+
+```python
+data = {"nums": [1, 2, 3, 4, 5, 6]}
+
+# Filter by value
+drlang.interpret('filter("$item > 3", $nums)', data)
+# Returns: [4, 5, 6]
+
+# Filter even numbers
+drlang.interpret('filter("$item % 2 == 0", $nums)', data)
+# Returns: [2, 4, 6]
+
+# Filter by index (even positions)
+drlang.interpret('filter("$index % 2 == 0", $nums)', data)
+# Returns: [1, 3, 5]
+
+# Filter strings
+data = {"words": ["apple", "banana", "apricot", "cherry"]}
+drlang.interpret('filter("regex_match($item, \"^a\")", $words)', data)
+# Returns: ["apple", "apricot"]
+```
+
+**reduce(expression, list, initial=None)** - Accumulate to single value:
+
+```python
+data = {"nums": [1, 2, 3, 4, 5]}
+
+# Sum all numbers (uses $acc for accumulator)
+drlang.interpret('reduce("$acc + $item", $nums)', data)
+# Returns: 15
+
+# With initial value
+drlang.interpret('reduce("$acc + $item", $nums, 10)', data)
+# Returns: 25
+
+# Find maximum
+expr = 'reduce("if($item > $acc, $item, $acc)", $nums)'
+drlang.interpret(expr, data)
+# Returns: 5
+
+# String concatenation
+data = {"words": ["Hello", "World", "DRLang"]}
+drlang.interpret('reduce("$acc + \" \" + $item", $words)', data)
+# Returns: "Hello World DRLang"
+```
+
+#### Chaining Operations
+
+Combine multiple list operations for powerful data transformations:
+
+```python
+data = {"nums": [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]}
+
+# Pipeline: double → filter > 10 → sum
+doubled = drlang.interpret('map("$item * 2", $nums)', data)
+data["doubled"] = doubled
+
+filtered = drlang.interpret('filter("$item > 10", $doubled)', data)
+data["filtered"] = filtered
+
+total = drlang.interpret('reduce("$acc + $item", $filtered)', data)
+# total = 80 (sum of [12, 14, 16, 18, 20])
+```
+
+**Real-world example - Process user data:**
+
+```python
+data = {
+    "users": [
+        {"name": "Alice", "age": 30, "score": 85},
+        {"name": "Bob", "age": 25, "score": 92},
+        {"name": "Charlie", "age": 35, "score": 78},
+        {"name": "Diana", "age": 28, "score": 95}
+    ]
+}
+
+# Extract names using map
+from drlang.functions import map_list
+names = map_list("$item>name", data["users"], {})
+# Returns: ["Alice", "Bob", "Charlie", "Diana"]
+
+# Filter high scorers
+from drlang.functions import filter_list
+high_scorers = filter_list("$item>score >= 90", data["users"], {})
+# Returns: [{"name": "Bob", ...}, {"name": "Diana", ...}]
+
+# Calculate average score
+from drlang.functions import reduce_list
+scores = map_list("$item>score", data["users"], {})
+total = reduce_list("$acc + $item", scores, 0, {})
+average = total / len(scores)
+# average = 87.5
+```
+
+See [examples/list_operations_demo.py](examples/list_operations_demo.py) for more comprehensive examples.
+
 ## Custom Syntax
 
 DRLang allows you to customize the syntax by changing the reference indicator and key delimiter symbols using the `DRLConfig` class:
@@ -656,6 +937,125 @@ expr = 'tax(discount $(price, $tier), $tax_rate)'
 final_price = interpret(expr, data, config)
 # Returns: 91.8 (100 * 0.85 * 1.08)
 ```
+
+## Batch Processing with drop_empty
+
+When using `interpret_dict` to process multiple expressions, you can configure it to exclude keys with `None` values from the result using the `drop_empty` option. This is useful for cleaning API responses, generating sparse data structures, or handling optional fields.
+
+### Basic Usage
+
+```python
+from drlang import interpret_dict, DRLConfig
+
+expressions = {
+    "name": "$user>name",
+    "email": "$user>email",
+    "phone": "$[user>phone]",      # Optional - may be None
+    "address": "$[user>address]",  # Optional - may be None
+}
+
+context = {
+    "user": {
+        "name": "Alice",
+        "email": "alice@example.com",
+        # phone and address are missing
+    }
+}
+
+# Default behavior - None values are kept
+result = interpret_dict(expressions, context)
+# Returns: {'name': 'Alice', 'email': 'alice@example.com', 'phone': None, 'address': None}
+
+# With drop_empty=True - None values are excluded
+config = DRLConfig(drop_empty=True)
+result = interpret_dict(expressions, context, config)
+# Returns: {'name': 'Alice', 'email': 'alice@example.com'}
+# Note: 'phone' and 'address' keys are not in the result
+```
+
+### Falsy Values Are Preserved
+
+The `drop_empty` option only drops `None` values, not other falsy values like `0`, `False`, or empty strings:
+
+```python
+expressions = {
+    "count": "$stats>count",
+    "enabled": "$stats>enabled",
+    "message": "$stats>message",
+    "optional": "$[stats>optional]",
+}
+
+context = {
+    "stats": {
+        "count": 0,           # Falsy but NOT None
+        "enabled": False,     # Falsy but NOT None
+        "message": "",        # Falsy but NOT None
+    }
+}
+
+config = DRLConfig(drop_empty=True)
+result = interpret_dict(expressions, context, config)
+# Returns: {'count': 0, 'enabled': False, 'message': ''}
+# Only 'optional' is excluded because it's None
+```
+
+### Real-World Use Case: API Response Cleaning
+
+```python
+from drlang import interpret_dict, DRLConfig
+
+# Transform and clean API data
+expressions = {
+    "id": "$user>id",
+    "full_name": "$user>name",
+    "contact_email": "$[user>email]",
+    "phone_number": "$[user>phone]",
+    "verified": "$[user>verified]",
+    "premium": "$[user>premium]",
+}
+
+config = DRLConfig(drop_empty=True)
+
+# Process multiple users - only include present fields
+users = [
+    {"user": {"id": 1, "name": "Alice", "email": "alice@example.com", "verified": True}},
+    {"user": {"id": 2, "name": "Bob", "phone": "555-1234", "premium": True}},
+]
+
+for user_data in users:
+    result = interpret_dict(expressions, user_data, config)
+    print(result)
+
+# Output:
+# {'id': 1, 'full_name': 'Alice', 'contact_email': 'alice@example.com', 'verified': True}
+# {'id': 2, 'full_name': 'Bob', 'phone_number': '555-1234', 'premium': True}
+```
+
+### Nested Dictionaries
+
+The `drop_empty` option works recursively with nested dictionaries:
+
+```python
+expressions = {
+    "user": {
+        "id": "$id",
+        "name": "$name",
+        "contact": {
+            "email": "$[email]",
+            "phone": "$[phone]",
+        }
+    }
+}
+
+context = {"id": 123, "name": "Alice"}
+config = DRLConfig(drop_empty=True)
+
+result = interpret_dict(expressions, context, config)
+# Returns: {'user': {'id': 123, 'name': 'Alice', 'contact': {}}}
+# Empty nested dicts are preserved, but keys with None are excluded
+```
+
+See [examples/drop_empty_demo.py](examples/drop_empty_demo.py) for more comprehensive examples.
 
 ## Error Handling
 
@@ -825,6 +1225,62 @@ drlang.interpret(r'regex_sub("[^\\d]", "", "(123) 456-7890")', {})
 
 # Extract domain from email
 drlang.interpret(r'regex_extract("@(\\w+\\.\\w+)", "user@example.com", 1)', {})
+# Returns: 'example.com'
+```
+
+### List Functions
+- `list_get(list, index, default=None)` - Safe element access with default value
+- `list_slice(list, start, end, step=1)` - Extract subsequence from list
+- `list_append(list, item)` - Append item to list (returns new list)
+- `list_concat(list1, list2)` - Concatenate two lists
+- `list_contains(list, item)` - Check if item exists in list
+- `list_index(list, item, default=None)` - Find index of item in list
+- `list_reverse(list)` - Reverse list order
+- `list_unique(list)` - Remove duplicates while preserving order
+- `list_flatten(list)` - Flatten nested list one level
+
+```python
+# Safe access with default
+drlang.interpret("list_get($items, 10, 'N/A')", {"items": [1, 2, 3]})
+# Returns: 'N/A'
+
+# Slice with step
+drlang.interpret("list_slice($nums, 0, 10, 2)", {"nums": list(range(10))})
+# Returns: [0, 2, 4, 6, 8]
+
+# Check membership
+drlang.interpret("list_contains($tags, 'urgent')", {"tags": ["urgent", "important"]})
+# Returns: True
+
+# Remove duplicates
+drlang.interpret("list_unique($values)", {"values": [1, 2, 2, 3, 1]})
+# Returns: [1, 2, 3]
+```
+
+### Iteration Functions
+- `map(expression, list)` - Transform each element using expression (provides `$item` and `$index`)
+- `filter(expression, list)` - Select elements where expression is true (provides `$item` and `$index`)
+- `reduce(expression, list, initial=None)` - Accumulate list to single value (provides `$acc`, `$item`, `$index`)
+
+```python
+# Double each number
+drlang.interpret('map("$item * 2", $nums)', {"nums": [1, 2, 3]})
+# Returns: [2, 4, 6]
+
+# Filter even numbers
+drlang.interpret('filter("$item % 2 == 0", $nums)', {"nums": [1, 2, 3, 4, 5, 6]})
+# Returns: [2, 4, 6]
+
+# Sum all values
+drlang.interpret('reduce("$acc + $item", $nums)', {"nums": [1, 2, 3, 4, 5]})
+# Returns: 15
+
+# Combine operations
+data = {"nums": [1, 2, 3, 4, 5]}
+doubled = drlang.interpret('map("$item * 2", $nums)', data)
+data["doubled"] = doubled
+result = drlang.interpret('filter("$item > 5", $doubled)', data)
+# result = [6, 8, 10]
 # Returns: 'example.com'
 ```
 

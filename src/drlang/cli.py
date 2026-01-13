@@ -246,6 +246,18 @@ class DRLangShell(cmd.Cmd):
             "Math": ["max", "min", "int", "float", "abs", "round"],
             "Type": ["str", "bool", "int", "float"],
             "Collection": ["len", "sorted", "reversed", "sum", "all", "any"],
+            "List": [
+                "list_get",
+                "list_slice",
+                "list_append",
+                "list_concat",
+                "list_contains",
+                "list_index",
+                "list_reverse",
+                "list_unique",
+                "list_flatten",
+            ],
+            "Iteration": ["map", "filter", "reduce"],
             "Conditional": ["if"],
             "Random": [
                 "random",
@@ -418,9 +430,28 @@ String Functions:
     replace($text, "old", "new")   - Replace text
     len($message)                  - String length
 
+List Operations:
+    $items>0                       - Access list by index
+    $matrix>1>2                    - Nested list access
+    list_get($nums, 5, "N/A")      - Safe access with default
+    list_slice($nums, 0, 10, 2)    - Slice with step
+    list_contains($tags, "urgent") - Check membership
+    list_reverse($items)           - Reverse list
+
+Iteration Functions:
+    map("$item * 2", $nums)        - Transform each element
+    filter("$item > 5", $nums)     - Select elements
+    reduce("$acc + $item", $nums)  - Accumulate to single value
+
 Conditionals:
     if($age >= 18, "adult", "minor")
     if($[premium], $rate * 0.9, $rate)
+
+Batch Processing (interpret_dict):
+    # Exclude None values from results
+    from drlang import interpret_dict, DRLConfig
+    config = DRLConfig(drop_empty=True)
+    interpret_dict(exprs, data, config)
 
 Math Functions:
     max($x, $y)                    - Maximum value
