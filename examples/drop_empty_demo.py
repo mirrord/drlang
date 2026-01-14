@@ -1,10 +1,10 @@
-"""Demo of the drop_empty feature in interpret_dict.
+"""Demo of the drop_empty feature in interpolate_dict.
 
 This example shows how the drop_empty configuration option can be used
 to exclude None values from the resulting dictionary.
 """
 
-from drlang import interpret_dict, DRLConfig
+from drlang import interpolate_dict, DRLConfig
 
 
 def demo_drop_empty_false():
@@ -31,7 +31,7 @@ def demo_drop_empty_false():
     }
 
     # Default config - None values are kept
-    result = interpret_dict(expressions, context)
+    result = interpolate_dict(expressions, context)
 
     print("\nExpressions:", expressions)
     print("\nContext:", context)
@@ -66,7 +66,7 @@ def demo_drop_empty_true():
 
     # With drop_empty=True, None values are excluded
     config = DRLConfig(drop_empty=True)
-    result = interpret_dict(expressions, context, config)
+    result = interpolate_dict(expressions, context, config)
 
     print("\nExpressions:", expressions)
     print("\nContext:", context)
@@ -132,7 +132,7 @@ def demo_api_response_cleaning():
     print()
 
     for user_context in users_data:
-        result = interpret_dict(expressions, user_context, config)
+        result = interpolate_dict(expressions, user_context, config)
         print(f"User {result['id']}:")
         for key, value in result.items():
             if key != "id":
@@ -164,7 +164,7 @@ def demo_falsy_values_preserved():
     }
 
     config = DRLConfig(drop_empty=True)
-    result = interpret_dict(expressions, context, config)
+    result = interpolate_dict(expressions, context, config)
 
     print("\nContext:", context)
     print("\nResult with drop_empty=True:")
@@ -206,7 +206,7 @@ def demo_nested_dicts():
     }
 
     config = DRLConfig(drop_empty=True)
-    result = interpret_dict(expressions, context, config)
+    result = interpolate_dict(expressions, context, config)
 
     print("\nContext:", context)
     print("\nResult with drop_empty=True (nested):")
@@ -223,7 +223,7 @@ def main():
     """Run all demonstrations."""
     print("\n")
     print("╔" + "=" * 68 + "╗")
-    print("║" + " " * 15 + "DRLang drop_empty Feature Demo" + " " * 22 + "║")
+    print("║" + " " * 12 + "DRLang interpolate_dict drop_empty Demo" + " " * 15 + "║")
     print("╚" + "=" * 68 + "╝")
     print()
 
