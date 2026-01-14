@@ -3,7 +3,8 @@
 # SPDX-License-Identifier: MIT
 from drlang.language import (
     interpret,
-    interpret_dict,
+    interpolate,
+    interpolate_dict,
     DRLConfig,
     DRLError,
     DRLSyntaxError,
@@ -15,7 +16,8 @@ from drlang.functions import register_function
 
 __all__ = [
     "interpret",
-    "interpret_dict",
+    "interpolate",
+    "interpolate_dict",
     "DRLConfig",
     "register_function",
     "DRLError",

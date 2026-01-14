@@ -87,7 +87,7 @@ class DRLConfig:
             ref_indicator: Symbol to indicate data references (default: '$')
             key_delimiter: Symbol to separate nested keys (default: '>')
             custom_functions: Optional dict of custom functions to register {name: Callable}
-            drop_empty: If True, interpret_dict will exclude keys with None values (default: False)
+            drop_empty: If True, interpolate_dict will exclude keys with None values (default: False)
         """
         # Validate that reference indicator doesn't conflict with critical syntax
         # Key delimiters are only used within references so they're more flexible
@@ -976,40 +976,242 @@ def interpret(
         )
 
 
-def interpret_dict(
-    expressions: Dict[str, Any],
+def interpolate_dict(
+    templates: Dict[str, Any],
     context: Dict[str, Any],
     config: Optional[DRLConfig] = None,
 ) -> Dict[str, Any]:
-    """Interpret multiple DRL expressions from a dictionary.
+    """Interpolate multiple template strings from a dictionary.
 
     Args:
-        expressions: A dictionary mapping keys to DRL expression strings or nested dictionaries/lists
+        templates: A dictionary mapping keys to template strings or nested dictionaries/lists
         context: The data dictionary to resolve references from
         config: Optional DRLConfig for custom syntax symbols (includes drop_empty flag)
+
     Returns:
-        A dictionary mapping keys to evaluated results (excludes None values if config.drop_empty is True)
+        A dictionary mapping keys to interpolated strings (excludes None values if config.drop_empty is True)
     """
     if config is None:
         config = DEFAULT_CONFIG
 
     results = {}
-    for key, expr in expressions.items():
-        if isinstance(expr, dict):
+    for key, template in templates.items():
+        if isinstance(template, dict):
             # Recursively handle nested dictionaries
-            value = interpret_dict(expr, context, config)
-        elif isinstance(expr, list):
-            # Handle lists of expressions
+            value = interpolate_dict(template, context, config)
+        elif isinstance(template, list):
+            # Handle lists of templates
             value = [
-                interpret(item, context, config) if isinstance(item, str) else item
-                for item in expr
+                interpolate(item, context, config) if isinstance(item, str) else item
+                for item in template
             ]
+        elif isinstance(template, str):
+            # Interpolate single template strings
+            value = interpolate(template, context, config)
         else:
-            # Interpret single expressions
-            value = interpret(expr, context, config)
+            # Pass through non-string values unchanged
+            value = template
 
         # Only include in results if not None, or if drop_empty is False
         if not config.drop_empty or value is not None:
             results[key] = value
 
     return results
+
+
+def interpolate(
+    template: str, context: Dict[str, Any], config: Optional[DRLConfig] = None
+) -> str:
+    """Interpolate a template string, treating content as literal unless specially marked.
+
+    Content is treated as a literal string UNLESS:
+    1. Wrapped in {% expression %} - the expression is evaluated and result inserted
+    2. Preceded by a reference indicator (e.g., $ref>path) - the reference is resolved
+
+    Multiple interpolation sequences can be included in a single string, with
+    content between them remaining static (literal).
+
+    Args:
+        template: The template string with optional interpolation sequences
+        context: The data dictionary to resolve references from
+        config: Optional DRLConfig for custom syntax symbols
+
+    Returns:
+        The interpolated string with all expressions evaluated and references resolved
+
+    Raises:
+        DRLSyntaxError: For syntax errors in expressions
+        DRLReferenceError: If a reference path cannot be resolved
+        DRLNameError: If a function is not found
+        DRLTypeError: For type-related errors
+
+    Examples:
+        >>> interpolate('Hello, world!', {})
+        'Hello, world!'
+        >>> interpolate('Value is $value', {'value': 42})
+        'Value is 42'
+        >>> interpolate('Sum is {% 2 + 3 %}', {})
+        'Sum is 5'
+        >>> interpolate('Hello $name, you have {% $count * 2 %} items', {'name': 'Alice', 'count': 5})
+        'Hello Alice, you have 10 items'
+        >>> interpolate('Path: $data>nested>value', {'data': {'nested': {'value': 'found'}}})
+        'Path: found'
+    """
+    if config is None:
+        config = DEFAULT_CONFIG
+
+    ref_indicator = config.ref_indicator
+    result = []
+    i = 0
+    template_len = len(template)
+
+    while i < template_len:
+        # Check for {% expression %} block
+        if template[i : i + 2] == "{%":
+            # Find the closing %}
+            start_pos = i
+            i += 2  # Skip {%
+
+            # Skip leading whitespace
+            while i < template_len and template[i].isspace():
+                i += 1
+
+            # Find the closing %}
+            expr_start = i
+            depth = 1
+            while i < template_len:
+                if template[i : i + 2] == "{%":
+                    depth += 1
+                    i += 2
+                elif template[i : i + 2] == "%}":
+                    depth -= 1
+                    if depth == 0:
+                        break
+                    i += 2
+                else:
+                    i += 1
+
+            if depth != 0:
+                raise DRLSyntaxError(
+                    "Unterminated expression block: expected closing '%}'",
+                    template,
+                    start_pos,
+                    "Expression block started with '{%' but never closed",
+                )
+
+            # Extract and evaluate the expression
+            expr = template[expr_start:i].rstrip()
+            i += 2  # Skip %}
+
+            try:
+                value = interpret(expr, context, config)
+                result.append(str(value) if value is not None else "")
+            except DRLError:
+                raise
+            except Exception as e:
+                raise DRLError(
+                    f"Error evaluating expression: {str(e)}",
+                    template,
+                    start_pos,
+                    f"Expression: {expr}",
+                )
+            continue
+
+        # Check for reference indicator (e.g., $ref>path)
+        if template[i : i + len(ref_indicator)] == ref_indicator:
+            start_pos = i
+            i += len(ref_indicator)
+
+            # Check for behavior modifiers: (), [], {}
+            behavior = "required"
+            closing_delimiter = None
+
+            if i < template_len:
+                if template[i] == "(":
+                    behavior = "required"
+                    closing_delimiter = ")"
+                    i += 1
+                elif template[i] == "[":
+                    behavior = "optional"
+                    closing_delimiter = "]"
+                    i += 1
+                elif template[i] == "{":
+                    behavior = "passthrough"
+                    closing_delimiter = "}"
+                    i += 1
+
+            # Collect the reference path
+            ref_path = ""
+
+            if closing_delimiter:
+                # Parse until closing delimiter
+                while i < template_len and template[i] != closing_delimiter:
+                    ref_path += template[i]
+                    i += 1
+                if i >= template_len:
+                    raise DRLSyntaxError(
+                        f"Unterminated reference: expected closing '{closing_delimiter}'",
+                        template,
+                        start_pos,
+                        f"Reference started at position {start_pos} but never closed",
+                    )
+                i += 1  # Skip closing delimiter
+            else:
+                # Collect reference path until stop characters
+                key_delimiter = config.key_delimiter
+                # Stop at whitespace, operators, and other special chars
+                # but allow key_delimiter within reference
+                stop_chars = " \t\n\r(),'\"+-*/%^<>=![]{};"
+                stop_chars += ref_indicator  # Stop at next reference
+
+                while i < template_len:
+                    char = template[i]
+
+                    # Allow key_delimiter within reference
+                    if char == key_delimiter[0]:
+                        # Check for multi-char delimiter
+                        if template[i : i + len(key_delimiter)] == key_delimiter:
+                            ref_path += key_delimiter
+                            i += len(key_delimiter)
+                            continue
+
+                    # Stop at stop characters (but not key_delimiter)
+                    if char in stop_chars:
+                        break
+
+                    ref_path += char
+                    i += 1
+
+            ref_path = ref_path.strip()
+
+            if ref_path:
+                # Build original reference string for passthrough behavior
+                if closing_delimiter:
+                    delim_open = {"required": "(", "optional": "[", "passthrough": "{"}
+                    original_ref = f"{ref_indicator}{delim_open[behavior]}{ref_path}{closing_delimiter}"
+                else:
+                    original_ref = f"{ref_indicator}{ref_path}"
+
+                try:
+                    value = resolve_reference(
+                        ref_path,
+                        context,
+                        config,
+                        template,
+                        start_pos,
+                        behavior,
+                        original_ref,
+                    )
+                    result.append(str(value) if value is not None else "")
+                except DRLError:
+                    raise
+            else:
+                # Empty reference - just include the indicator as literal
+                result.append(ref_indicator)
+            continue
+
+        # Regular character - add as literal
+        result.append(template[i])
+        i += 1
+
+    return "".join(result)

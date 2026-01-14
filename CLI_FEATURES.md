@@ -24,7 +24,7 @@ The DRLang CLI provides three main capabilities as requested:
    ✓ test command: Evaluate multiple expressions at once
    ✓ File support: Load expressions from JSON
    ✓ Batch testing: See all results in a formatted table
-   ✓ Programmatic API: interpret_dict() function
+   ✓ Programmatic API: interpolate_dict() function
 
    Examples:
      drlang> test {"name": "$user>name", "adult": "$user>age >= 18"}
@@ -32,7 +32,7 @@ The DRLang CLI provides three main capabilities as requested:
      drlang> test file expressions.json
      
      Python:
-       results = interpret_dict(expressions, context)
+       results = interpolate_dict(templates, context)
 
 3. HELP FUNCTION FOR AVAILABLE FUNCTIONS
    ✓ functions command: List all 40+ built-in functions

@@ -88,9 +88,10 @@ drlang --ref @ --delim .
   - [Conditional Logic](#conditional-logic)
   - [List Operations](#list-operations)
   - [Function Calls](#function-calls)
+- [String Interpolation](#string-interpolation)
 - [Custom Syntax](#custom-syntax)
 - [Custom Functions](#custom-functions)
-- [Batch Processing with drop_empty](#batch-processing-with-drop_empty)
+- [Batch Processing with interpolate_dict](#batch-processing-with-interpolate_dict)
 - [Error Handling](#error-handling)
 - [Available Functions](#available-functions)
 - [Installation](#installation)
@@ -297,23 +298,23 @@ drlang> test file expressions.json
 
 Or programmatically:
 ```python
-from drlang import interpret_dict, DRLConfig
+from drlang import interpolate_dict, DRLConfig
 import json
 
 with open('data.json') as f:
     context = json.load(f)
-with open('expressions.json') as f:
-    expressions = json.load(f)
+with open('templates.json') as f:
+    templates = json.load(f)
 
 # Default: includes all keys (even with None values)
-results = interpret_dict(expressions, context)
+results = interpolate_dict(templates, context)
 
 # With drop_empty=True: excludes keys with None values
 config = DRLConfig(drop_empty=True)
-results = interpret_dict(expressions, context, config)
+results = interpolate_dict(templates, context, config)
 ```
 
-See [Batch Processing with drop_empty](#batch-processing-with-drop_empty) for more details on filtering None values.
+See [Batch Processing with interpolate_dict](#batch-processing-with-interpolate_dict) for more details on filtering None values.
 
 ## Syntax
 
@@ -938,20 +939,87 @@ final_price = interpret(expr, data, config)
 # Returns: 91.8 (100 * 0.85 * 1.08)
 ```
 
-## Batch Processing with drop_empty
+## String Interpolation
 
-When using `interpret_dict` to process multiple expressions, you can configure it to exclude keys with `None` values from the result using the `drop_empty` option. This is useful for cleaning API responses, generating sparse data structures, or handling optional fields.
+DRLang provides powerful string interpolation via the `interpolate()` and `interpolate_dict()` functions. These treat strings as **literal text by default**, only evaluating content that is explicitly marked for interpolation.
+
+### interpolate() Function
+
+The `interpolate()` function processes a template string where:
+- Regular text is treated as literal (unchanged)
+- `$reference` paths are resolved from context
+- `{% expression %}` blocks are evaluated as DRL expressions
+
+```python
+from drlang import interpolate
+
+context = {"name": "Alice", "count": 5, "price": 19.99}
+
+# Plain strings are unchanged
+interpolate("Hello, world!", {})  # "Hello, world!"
+
+# Reference interpolation
+interpolate("Hello $name!", context)  # "Hello Alice!"
+
+# Expression blocks
+interpolate("Total: {% $count * $price %}", context)  # "Total: 99.95"
+
+# Mixed content
+interpolate("Hi $name, you have {% $count * 2 %} items", context)
+# "Hi Alice, you have 10 items"
+
+# Nested references
+data = {"user": {"profile": {"name": "Bob"}}}
+interpolate("Name: $user>profile>name", data)  # "Name: Bob"
+```
+
+### interpolate_dict() Function
+
+Process multiple templates at once with `interpolate_dict()`:
+
+```python
+from drlang import interpolate_dict
+
+templates = {
+    "greeting": "Hello $name!",
+    "summary": "You have {% $count * 2 %} items",
+    "nested": {
+        "email": "Contact: $email",
+    },
+    "items": ["Item: $item1", "Item: $item2"],
+}
+
+context = {
+    "name": "Alice",
+    "count": 5,
+    "email": "alice@example.com",
+    "item1": "Apple",
+    "item2": "Banana",
+}
+
+result = interpolate_dict(templates, context)
+# {
+#     "greeting": "Hello Alice!",
+#     "summary": "You have 10 items",
+#     "nested": {"email": "Contact: alice@example.com"},
+#     "items": ["Item: Apple", "Item: Banana"],
+# }
+```
+
+## Batch Processing with interpolate_dict
+
+When using `interpolate_dict` to process multiple templates, you can configure it to exclude keys with `None` values from the result using the `drop_empty` option. This is useful for cleaning API responses, generating sparse data structures, or handling optional fields.
 
 ### Basic Usage
 
 ```python
-from drlang import interpret_dict, DRLConfig
+from drlang import interpolate_dict, DRLConfig
 
-expressions = {
+templates = {
     "name": "$user>name",
     "email": "$user>email",
-    "phone": "$[user>phone]",      # Optional - may be None
-    "address": "$[user>address]",  # Optional - may be None
+    "phone": "$[user>phone]",      # Optional - may return empty
+    "address": "$[user>address]",  # Optional - may return empty
 }
 
 context = {
@@ -962,15 +1030,13 @@ context = {
     }
 }
 
-# Default behavior - None values are kept
-result = interpret_dict(expressions, context)
-# Returns: {'name': 'Alice', 'email': 'alice@example.com', 'phone': None, 'address': None}
+# Default behavior - all keys included
+result = interpolate_dict(templates, context)
+# Returns: {'name': 'Alice', 'email': 'alice@example.com', 'phone': '', 'address': ''}
 
-# With drop_empty=True - None values are excluded
+# With drop_empty=True - empty values may be excluded
 config = DRLConfig(drop_empty=True)
-result = interpret_dict(expressions, context, config)
-# Returns: {'name': 'Alice', 'email': 'alice@example.com'}
-# Note: 'phone' and 'address' keys are not in the result
+result = interpolate_dict(templates, context, config)
 ```
 
 ### Falsy Values Are Preserved
@@ -978,84 +1044,85 @@ result = interpret_dict(expressions, context, config)
 The `drop_empty` option only drops `None` values, not other falsy values like `0`, `False`, or empty strings:
 
 ```python
-expressions = {
-    "count": "$stats>count",
-    "enabled": "$stats>enabled",
-    "message": "$stats>message",
-    "optional": "$[stats>optional]",
+templates = {
+    "count": 0,            # Falsy but NOT None
+    "enabled": False,      # Falsy but NOT None
+    "message": "",         # Falsy but NOT None
+}
+
+config = DRLConfig(drop_empty=True)
+result = interpolate_dict(templates, {}, config)
+# Returns: {'count': 0, 'enabled': False, 'message': ''}
+# All falsy values are preserved, only None would be dropped
+```
+
+### Real-World Use Case: Email Template Generation
+
+```python
+from drlang import interpolate_dict, DRLConfig
+
+# Generate personalized email content
+templates = {
+    "subject": "Welcome to $company, $user>name!",
+    "body": """Dear $user>name,
+
+Thank you for joining $company!
+
+Your account details:
+- Email: $user>email
+- Plan: {% if($user>premium, 'Premium', 'Free') %}
+
+Best regards,
+The $company Team""",
+    "footer": "© {% 2026 %} $company. All rights reserved.",
 }
 
 context = {
-    "stats": {
-        "count": 0,           # Falsy but NOT None
-        "enabled": False,     # Falsy but NOT None
-        "message": "",        # Falsy but NOT None
-    }
+    "company": "Acme Inc",
+    "user": {
+        "name": "Alice",
+        "email": "alice@example.com",
+        "premium": True,
+    },
 }
 
-config = DRLConfig(drop_empty=True)
-result = interpret_dict(expressions, context, config)
-# Returns: {'count': 0, 'enabled': False, 'message': ''}
-# Only 'optional' is excluded because it's None
-```
-
-### Real-World Use Case: API Response Cleaning
-
-```python
-from drlang import interpret_dict, DRLConfig
-
-# Transform and clean API data
-expressions = {
-    "id": "$user>id",
-    "full_name": "$user>name",
-    "contact_email": "$[user>email]",
-    "phone_number": "$[user>phone]",
-    "verified": "$[user>verified]",
-    "premium": "$[user>premium]",
-}
-
-config = DRLConfig(drop_empty=True)
-
-# Process multiple users - only include present fields
-users = [
-    {"user": {"id": 1, "name": "Alice", "email": "alice@example.com", "verified": True}},
-    {"user": {"id": 2, "name": "Bob", "phone": "555-1234", "premium": True}},
-]
-
-for user_data in users:
-    result = interpret_dict(expressions, user_data, config)
-    print(result)
-
-# Output:
-# {'id': 1, 'full_name': 'Alice', 'contact_email': 'alice@example.com', 'verified': True}
-# {'id': 2, 'full_name': 'Bob', 'phone_number': '555-1234', 'premium': True}
+result = interpolate_dict(templates, context)
+print(result["subject"])  # "Welcome to Acme Inc, Alice!"
+print(result["body"])     # Personalized email body
 ```
 
 ### Nested Dictionaries
 
-The `drop_empty` option works recursively with nested dictionaries:
+The `interpolate_dict` function works recursively with nested dictionaries:
 
 ```python
-expressions = {
+from drlang import interpolate_dict
+
+templates = {
     "user": {
-        "id": "$id",
-        "name": "$name",
+        "id": "ID: $id",
+        "name": "Name: $name",
         "contact": {
-            "email": "$[email]",
-            "phone": "$[phone]",
+            "email": "Email: $email",
+            "formatted": "$name <$email>",
         }
     }
 }
 
-context = {"id": 123, "name": "Alice"}
-config = DRLConfig(drop_empty=True)
+context = {"id": 123, "name": "Alice", "email": "alice@example.com"}
 
-result = interpret_dict(expressions, context, config)
-# Returns: {'user': {'id': 123, 'name': 'Alice', 'contact': {}}}
-# Empty nested dicts are preserved, but keys with None are excluded
+result = interpolate_dict(templates, context)
+# Returns: {
+#     'user': {
+#         'id': 'ID: 123',
+#         'name': 'Name: Alice',
+#         'contact': {
+#             'email': 'Email: alice@example.com',
+#             'formatted': 'Alice <alice@example.com>'
+#         }
+#     }
+# }
 ```
-
-See [examples/drop_empty_demo.py](examples/drop_empty_demo.py) for more comprehensive examples.
 
 ## Error Handling
 

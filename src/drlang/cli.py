@@ -10,7 +10,7 @@ import sys
 from typing import Dict, Any, Optional
 import inspect
 
-from drlang import interpret, interpret_dict, DRLConfig
+from drlang import interpret, interpolate_dict, DRLConfig
 from drlang.functions import FUNCTIONS
 from drlang import (
     DRLError,
@@ -147,18 +147,20 @@ class DRLangShell(cmd.Cmd):
             print("Error: Usage: context [load <file> | clear]")
 
     def do_test(self, line):
-        """Test multiple expressions from a dictionary mapping.
+        """Test multiple template strings from a dictionary mapping.
 
         Usage:
-            test <json_dict>           - Test expressions from inline JSON
-            test file <file.json>      - Test expressions from JSON file
+            test <json_dict>           - Test templates from inline JSON
+            test file <file.json>      - Test templates from JSON file
 
         The JSON should be a dictionary where keys are labels and values are
-        DRLang expressions to evaluate.
+        template strings to interpolate. Templates can contain:
+        - $reference>path for data references
+        - {% expression %} for evaluated expressions
 
         Examples:
-            test {"name": "$user>name", "adult": "$user>age >= 18"}
-            test file expressions.json
+            test {"greeting": "Hello $user>name!", "age": "{% $user>age * 2 %}"}
+            test file templates.json
         """
         if not line.strip():
             print("Error: Usage: test <json_dict> OR test file <file.json>")
@@ -188,20 +190,20 @@ class DRLangShell(cmd.Cmd):
             print("Error: Input must be a dictionary")
             return
 
-        print("\nTesting expressions:")
+        print("\nTesting templates:")
         print("=" * 70)
 
         try:
-            results = interpret_dict(expressions, self.context, self.config)
+            results = interpolate_dict(expressions, self.context, self.config)
             for key, value in results.items():
-                expr = (
+                template = (
                     expressions[key]
                     if isinstance(expressions[key], str)
                     else "<nested>"
                 )
-                print(f"{key:20} {expr:30} => {value!r}")
+                print(f"{key:20} {template:30} => {value!r}")
         except DRLError as e:
-            print(f"Error during evaluation: {e}")
+            print(f"Error during interpolation: {e}")
 
         print("=" * 70)
 
@@ -447,11 +449,16 @@ Conditionals:
     if($age >= 18, "adult", "minor")
     if($[premium], $rate * 0.9, $rate)
 
-Batch Processing (interpret_dict):
-    # Exclude None values from results
-    from drlang import interpret_dict, DRLConfig
-    config = DRLConfig(drop_empty=True)
-    interpret_dict(exprs, data, config)
+String Interpolation:
+    interpolate("Hello $name!", data)           - Literal-first templates
+    interpolate("Sum: {% 2 + 3 %}", {})         - Expression blocks
+    interpolate("$user>name is {% $age %}", data)
+
+Batch Processing (interpolate_dict):
+    # Process multiple templates at once
+    from drlang import interpolate_dict, DRLConfig
+    config = DRLConfig(drop_empty=True)         # Exclude None values
+    interpolate_dict(templates, data, config)
 
 Math Functions:
     max($x, $y)                    - Maximum value

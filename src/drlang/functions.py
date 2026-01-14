@@ -1,7 +1,7 @@
 import builtins
 import inspect
 import re
-from typing import Any, get_type_hints, get_origin, Callable
+from typing import Any, Optional, get_type_hints, get_origin, Callable
 
 
 def print_value(*args: Any) -> None:
@@ -169,7 +169,9 @@ def list_get(lst: list, index: int, default: Any = None) -> Any:
         return default
 
 
-def list_slice(lst: list, start: int = None, end: int = None, step: int = 1) -> list:
+def list_slice(
+    lst: list, start: Optional[int] = None, end: Optional[int] = None, step: int = 1
+) -> list:
     """Get a slice of a list.
 
     Args:
@@ -316,7 +318,7 @@ def list_flatten(lst: list) -> list:
     return result
 
 
-def map_list(expression: str, lst: list, context: dict = None) -> list:
+def map_list(expression: str, lst: list, context: Optional[dict] = None) -> list:
     """Apply an expression to each element of a list.
 
     The current item is available as $item in the expression.
@@ -354,7 +356,7 @@ def map_list(expression: str, lst: list, context: dict = None) -> list:
     return results
 
 
-def filter_list(expression: str, lst: list, context: dict = None) -> list:
+def filter_list(expression: str, lst: list, context: Optional[dict] = None) -> list:
     """Filter a list using an expression.
 
     The current item is available as $item in the expression.
@@ -388,7 +390,7 @@ def filter_list(expression: str, lst: list, context: dict = None) -> list:
 
 
 def reduce_list(
-    expression: str, lst: list, initial: Any = None, context: dict = None
+    expression: str, lst: list, initial: Any = None, context: Optional[dict] = None
 ) -> Any:
     """Reduce a list to a single value using an expression.
 
