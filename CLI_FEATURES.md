@@ -51,6 +51,44 @@ The DRLang CLI provides three main capabilities as requested:
      drlang> help split
      (Shows detailed help for split function)
 
+REFERENCE SYNTAX
+================
+
+DRLang supports three reference types with different behaviors:
+
+Basic References:
+  $key              Simple key lookup
+  $key>nested       Nested key lookup with > delimiter
+
+Bracketed References (for special characters):
+  $(key)            Required - error if missing
+  $[key]            Optional - returns None if missing  
+  ${key}            Passthrough - returns original if missing
+
+Special Characters in Keys:
+  Keys containing spaces, parentheses, or brackets MUST use bracketed syntax:
+  
+  $(user name)              Key with space
+  $(getData())              Key with parentheses
+  $(method(arg))            Key with nested parens (balanced)
+  $(API Response>getData()) Nested path with special chars
+
+  Examples:
+    drlang> set data {"user name": "Alice", "getValue()": 42}
+    drlang> $(user name)
+    => 'Alice'
+    drlang> $(getValue())
+    => 42
+
+Bare vs Bracketed References in Templates:
+  Bare references ($ref) stop at spaces and / for URL compatibility:
+    "Hello $name!"           -> "Hello Alice!"
+    "https://$domain/api"    -> "https://example.com/api"
+  
+  Use bracketed syntax for keys with special characters:
+    "User: $(user name)"     -> "User: Alice"
+    "Value: $(getData())"    -> "Value: 42"
+
 ADDITIONAL FEATURES
 ===================
 
@@ -104,6 +142,14 @@ Custom Syntax:
   $ drlang --ref @ --delim .
   drlang> @user.name
 
+Special Character Keys:
+  $ drlang
+  drlang> set api {"getData()": 42, "user info": {"full name": "Bob"}}
+  drlang> $(getData())
+  => 42
+  drlang> $(user info>full name)
+  => 'Bob'
+
 TESTING
 =======
 
@@ -115,6 +161,7 @@ All features have been tested and verified:
   ✓ File I/O (JSON loading)
   ✓ Error handling and reporting
   ✓ Command-line and interactive modes
+  ✓ Special characters in reference paths
 
 Run test_cli.py to verify all functionality.
 """

@@ -186,11 +186,24 @@ def tokenize(expression: str, config: Optional[DRLConfig] = None) -> List[Token]
             ref = ""
             # Collect reference path until closing delimiter or stop chars
             if closing_delimiter:
-                # Parse until closing delimiter
-                while i < len(expression) and expression[i] != closing_delimiter:
-                    ref += expression[i]
+                # Parse until balanced closing delimiter
+                # Track nested brackets/parens so $(func(x)) works correctly
+                depth = 1
+                bracket_pairs = {")": "(", "]": "[", "}": "{"}
+                opening = bracket_pairs.get(closing_delimiter, "")
+
+                while i < len(expression) and depth > 0:
+                    char = expression[i]
+                    if char == closing_delimiter:
+                        depth -= 1
+                        if depth == 0:
+                            break  # Don't include final closing delimiter
+                    elif char == opening:
+                        depth += 1
+                    ref += char
                     i += 1
-                if i >= len(expression):
+
+                if depth > 0:
                     raise DRLSyntaxError(
                         f"Unterminated reference: expected closing '{closing_delimiter}'",
                         original_expression,
@@ -1144,11 +1157,24 @@ def interpolate(
             ref_path = ""
 
             if closing_delimiter:
-                # Parse until closing delimiter
-                while i < template_len and template[i] != closing_delimiter:
-                    ref_path += template[i]
+                # Parse until balanced closing delimiter
+                # Track nested brackets/parens so $(func(x)) works correctly
+                depth = 1
+                bracket_pairs = {")": "(", "]": "[", "}": "{"}
+                opening = bracket_pairs.get(closing_delimiter, "")
+
+                while i < template_len and depth > 0:
+                    char = template[i]
+                    if char == closing_delimiter:
+                        depth -= 1
+                        if depth == 0:
+                            break  # Don't include final closing delimiter
+                    elif char == opening:
+                        depth += 1
+                    ref_path += char
                     i += 1
-                if i >= template_len:
+
+                if depth > 0:
                     raise DRLSyntaxError(
                         f"Unterminated reference: expected closing '{closing_delimiter}'",
                         template,
@@ -1158,10 +1184,11 @@ def interpolate(
                 i += 1  # Skip closing delimiter
             else:
                 # Collect reference path until stop characters
+                # For bare references in templates, stop at common delimiters
+                # Use bracketed syntax $(path) for paths containing spaces/special chars
                 key_delimiter = config.key_delimiter
-                # Stop at whitespace, operators, and other special chars
-                # but allow key_delimiter within reference
-                stop_chars = " \t\n\r(),'\"+-*/%^<>=![]{};"
+                # Stop at whitespace, quotes, braces (for {% %}), common punctuation, and path separators
+                stop_chars = " \t\n\r\"'{}(),;!?/"
                 stop_chars += ref_indicator  # Stop at next reference
 
                 while i < template_len:
@@ -1175,7 +1202,7 @@ def interpolate(
                             i += len(key_delimiter)
                             continue
 
-                    # Stop at stop characters (but not key_delimiter)
+                    # Stop at stop characters
                     if char in stop_chars:
                         break
 

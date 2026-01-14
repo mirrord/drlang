@@ -408,19 +408,68 @@ drlang.interpret(expr, data)
 # Returns: "unverified" (verified is optional, doesn't exist)
 ```
 
-#### Keys with Spaces
+#### Keys with Special Characters
 
-All reference types support keys containing spaces:
+DRLang supports keys containing spaces, parentheses, brackets, and other special characters. The behavior differs between **bare references** and **bracketed references**:
+
+**Bare References** (`$ref`) - Stop at spaces and common delimiters. Best for simple identifiers:
 
 ```python
-drlang.interpret("$[user info>full name]", {"user info": {"full name": "Bob Smith"}})
+# Simple keys work with bare references
+drlang.interpret("$name", {"name": "Alice"})
+# Returns: "Alice"
+
+# Keys with spaces work in interpret() - spaces allowed until operators/functions
+drlang.interpret("$user name", {"user name": "Bob"})
+# Returns: "Bob"
+```
+
+**Bracketed References** - Use `$(...)`, `$[...]`, or `${...}` for keys containing special characters:
+
+```python
+# Keys with spaces (recommended for clarity)
+drlang.interpret("$(user info>full name)", {"user info": {"full name": "Bob Smith"}})
 # Returns: "Bob Smith"
 
-drlang.interpret("$(company name)", {"company name": "ACME Corp"})
-# Returns: "ACME Corp"
+# Keys with parentheses (MUST use bracketed syntax)
+drlang.interpret("$(getData())", {"getData()": 42})
+# Returns: 42
 
-drlang.interpret("${missing key}", {})
-# Returns: "$missing key"
+# Keys with nested parentheses - balanced delimiter parsing
+drlang.interpret("$(func(a(b)))", {"func(a(b))": "nested"})
+# Returns: "nested"
+
+# Optional reference with special characters
+drlang.interpret("$[method()]", {"method()": "result"})
+# Returns: "result"
+
+# Passthrough reference with special characters  
+drlang.interpret("${missing()}", {})
+# Returns: "$missing()"
+
+# Complex nested paths with special characters
+data = {"API Response": {"getData()": {"user info": "value"}}}
+drlang.interpret("$(API Response>getData()>user info)", data)
+# Returns: "value"
+```
+
+**In `interpolate()` templates**, bare references stop at spaces and `/` for URL compatibility:
+
+```python
+from drlang import interpolate
+
+# Bare refs stop at spaces - use for simple identifiers
+interpolate("Hello $name!", {"name": "Alice"})  # "Hello Alice!"
+
+# URL-style templates work naturally  
+interpolate("https://$domain/api/v1", {"domain": "example.com"})
+# "https://example.com/api/v1"
+
+# For keys with spaces in templates, use bracketed syntax
+interpolate("Hello $(user name)!", {"user name": "Bob"})  # "Hello Bob!"
+
+# For keys with parentheses, bracketed syntax is required
+interpolate("Result: $(getValue())", {"getValue()": 42})  # "Result: 42"
 ```
 
 ### Mathematical Operators
@@ -971,6 +1020,15 @@ interpolate("Hi $name, you have {% $count * 2 %} items", context)
 # Nested references
 data = {"user": {"profile": {"name": "Bob"}}}
 interpolate("Name: $user>profile>name", data)  # "Name: Bob"
+
+# URL-style templates (bare refs stop at /)
+interpolate("https://$domain/api/users/$user_id", 
+            {"domain": "api.example.com", "user_id": "123"})
+# "https://api.example.com/api/users/123"
+
+# Keys with special characters use bracketed syntax
+interpolate("User: $(user name)", {"user name": "Alice"})  # "User: Alice"
+interpolate("Value: $(getValue())", {"getValue()": 42})  # "Value: 42"
 ```
 
 ### interpolate_dict() Function
