@@ -1002,7 +1002,8 @@ def interpolate_dict(
         config: Optional DRLConfig for custom syntax symbols (includes drop_empty flag)
 
     Returns:
-        A dictionary mapping keys to interpolated strings (excludes None values if config.drop_empty is True)
+        A dictionary mapping keys to interpolated strings.
+        If config.drop_empty is True, keys with None or empty string values are excluded.
     """
     if config is None:
         config = DEFAULT_CONFIG
@@ -1025,8 +1026,9 @@ def interpolate_dict(
             # Pass through non-string values unchanged
             value = template
 
-        # Only include in results if not None, or if drop_empty is False
-        if not config.drop_empty or value is not None:
+        # Only include in results if not empty, or if drop_empty is False
+        # drop_empty=True excludes both None and empty string ""
+        if not config.drop_empty or (value is not None and value != ""):
             results[key] = value
 
     return results
@@ -1034,12 +1036,17 @@ def interpolate_dict(
 
 def interpolate(
     template: str, context: Dict[str, Any], config: Optional[DRLConfig] = None
-) -> str:
+) -> Any:
     """Interpolate a template string, treating content as literal unless specially marked.
 
     Content is treated as a literal string UNLESS:
-    1. Wrapped in {% expression %} - the expression is evaluated and result inserted
+    1. Wrapped in {% expression %} - the expression is evaluated and result inserted (always returns string)
     2. Preceded by a reference indicator (e.g., $ref>path) - the reference is resolved
+
+    **Type Preservation:** If the template contains ONLY a single reference (e.g., "$value" or "$(key)"),
+    the original type from the context is preserved. If the template contains any literal text,
+    multiple references, or expression blocks {% %}, the result is converted to a string.
+    Note: None values are always converted to empty string "".
 
     Multiple interpolation sequences can be included in a single string, with
     content between them remaining static (literal).
@@ -1050,7 +1057,7 @@ def interpolate(
         config: Optional DRLConfig for custom syntax symbols
 
     Returns:
-        The interpolated string with all expressions evaluated and references resolved
+        The interpolated result - preserves type for single references, string otherwise
 
     Raises:
         DRLSyntaxError: For syntax errors in expressions
@@ -1063,6 +1070,12 @@ def interpolate(
         'Hello, world!'
         >>> interpolate('Value is $value', {'value': 42})
         'Value is 42'
+        >>> interpolate('$value', {'value': 42})  # Type preserved!
+        42
+        >>> interpolate('$items', {'items': [1, 2, 3]})  # Type preserved!
+        [1, 2, 3]
+        >>> interpolate('$[missing]', {})  # None -> empty string
+        ''
         >>> interpolate('Sum is {% 2 + 3 %}', {})
         'Sum is 5'
         >>> interpolate('Hello $name, you have {% $count * 2 %} items', {'name': 'Alice', 'count': 5})
@@ -1078,9 +1091,17 @@ def interpolate(
     i = 0
     template_len = len(template)
 
+    # Track if this is a "pure reference" template (single reference, no literals, no {% %})
+    # If so, we preserve the original type instead of converting to string
+    has_literal_text = False
+    has_expression_block = False
+    reference_count = 0
+    single_ref_value = None  # Store the value if it's a single reference
+
     while i < template_len:
         # Check for {% expression %} block
         if template[i : i + 2] == "{%":
+            has_expression_block = True  # Expression blocks always force string output
             # Find the closing %}
             start_pos = i
             i += 2  # Skip {%
@@ -1229,16 +1250,27 @@ def interpolate(
                         behavior,
                         original_ref,
                     )
+                    reference_count += 1
+                    single_ref_value = value  # Store for potential type preservation
                     result.append(str(value) if value is not None else "")
                 except DRLError:
                     raise
             else:
                 # Empty reference - just include the indicator as literal
                 result.append(ref_indicator)
+                has_literal_text = True
             continue
 
         # Regular character - add as literal
+        has_literal_text = True
         result.append(template[i])
         i += 1
+
+    # Type preservation: if template was just a single reference with no literals
+    # or expression blocks, return the original value type (except None -> "")
+    if reference_count == 1 and not has_literal_text and not has_expression_block:
+        if single_ref_value is None:
+            return ""
+        return single_ref_value
 
     return "".join(result)

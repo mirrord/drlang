@@ -457,7 +457,7 @@ String Interpolation:
 Batch Processing (interpolate_dict):
     # Process multiple templates at once
     from drlang import interpolate_dict, DRLConfig
-    config = DRLConfig(drop_empty=True)         # Exclude None values
+    config = DRLConfig(drop_empty=True)         # Exclude empty values
     interpolate_dict(templates, data, config)
 
 Math Functions:

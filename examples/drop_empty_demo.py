@@ -1,14 +1,14 @@
 """Demo of the drop_empty feature in interpolate_dict.
 
 This example shows how the drop_empty configuration option can be used
-to exclude None values from the resulting dictionary.
+to exclude None and empty string values from the resulting dictionary.
 """
 
 from drlang import interpolate_dict, DRLConfig
 
 
 def demo_drop_empty_false():
-    """Show default behavior - None values are kept."""
+    """Show default behavior - empty values are kept."""
     print("=" * 70)
     print("Example 1: Default behavior (drop_empty=False)")
     print("=" * 70)
@@ -16,8 +16,8 @@ def demo_drop_empty_false():
     expressions = {
         "name": "$user>name",
         "email": "$user>email",
-        "phone": "$[user>phone]",  # Optional - may be None
-        "address": "$[user>address]",  # Optional - may be None
+        "phone": "$[user>phone]",  # Optional - returns empty string if missing
+        "address": "$[user>address]",  # Optional - returns empty string if missing
         "age": "$user>age",
     }
 
@@ -30,7 +30,7 @@ def demo_drop_empty_false():
         }
     }
 
-    # Default config - None values are kept
+    # Default config - empty values are kept
     result = interpolate_dict(expressions, context)
 
     print("\nExpressions:", expressions)
@@ -42,7 +42,7 @@ def demo_drop_empty_false():
 
 
 def demo_drop_empty_true():
-    """Show drop_empty behavior - None values are excluded."""
+    """Show drop_empty behavior - empty values are excluded."""
     print("=" * 70)
     print("Example 2: With drop_empty=True")
     print("=" * 70)
@@ -50,8 +50,8 @@ def demo_drop_empty_true():
     expressions = {
         "name": "$user>name",
         "email": "$user>email",
-        "phone": "$[user>phone]",  # Optional - may be None
-        "address": "$[user>address]",  # Optional - may be None
+        "phone": "$[user>phone]",  # Optional - returns empty string if missing
+        "address": "$[user>address]",  # Optional - returns empty string if missing
         "age": "$user>age",
     }
 
@@ -64,13 +64,13 @@ def demo_drop_empty_true():
         }
     }
 
-    # With drop_empty=True, None values are excluded
+    # With drop_empty=True, None and empty string values are excluded
     config = DRLConfig(drop_empty=True)
     result = interpolate_dict(expressions, context, config)
 
     print("\nExpressions:", expressions)
     print("\nContext:", context)
-    print("\nResult (None values excluded):")
+    print("\nResult (empty values excluded):")
     for key, value in result.items():
         print(f"  {key}: {value!r}")
     print("\nNote: 'phone' and 'address' keys are not in the result")
@@ -141,24 +141,24 @@ def demo_api_response_cleaning():
 
 
 def demo_falsy_values_preserved():
-    """Show that falsy values (0, False, empty string) are NOT dropped."""
+    """Show that falsy values (0, False) are preserved, but empty strings are dropped."""
     print("=" * 70)
-    print("Example 4: Falsy Values Are Preserved")
+    print("Example 4: Falsy Values Behavior")
     print("=" * 70)
 
     expressions = {
         "count": "$stats>count",
         "enabled": "$stats>enabled",
         "message": "$stats>message",
-        "optional": "$[stats>optional]",  # This will be None
+        "optional": "$[stats>optional]",  # This will be empty string (None->empty)
         "score": "$stats>score",
     }
 
     context = {
         "stats": {
-            "count": 0,  # Falsy but NOT None
-            "enabled": False,  # Falsy but NOT None
-            "message": "",  # Falsy but NOT None
+            "count": 0,  # Falsy but NOT empty - preserved
+            "enabled": False,  # Falsy but NOT empty - preserved
+            "message": "",  # Empty string - DROPPED
             "score": 42,
         }
     }
@@ -170,8 +170,8 @@ def demo_falsy_values_preserved():
     print("\nResult with drop_empty=True:")
     for key, value in result.items():
         print(f"  {key}: {value!r}")
-    print("\nNote: Only 'optional' (None) is dropped.")
-    print("Falsy values like 0, False, and '' are kept.")
+    print("\nNote: 'optional' and 'message' are dropped (both are empty strings).")
+    print("Falsy values like 0 and False are kept.")
     print()
 
 
@@ -215,7 +215,9 @@ def demo_nested_dicts():
     print(f"    name: {result['user']['name']!r}")
     print(f"    contact: {result['user']['contact']}")
     print(f"    settings: {result['user']['settings']}")
-    print("\nNote: Empty nested dicts are preserved, but keys with None are excluded.")
+    print(
+        "\nNote: Empty nested dicts are preserved, but keys with empty values are excluded."
+    )
     print()
 
 

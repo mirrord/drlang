@@ -254,6 +254,82 @@ class TestEdgeCases:
         assert result == "List: [1, 2, 3]"
 
 
+class TestTypePreservation:
+    """Test that interpolate preserves types for single references."""
+
+    def test_single_ref_preserves_int(self):
+        """Single reference preserves integer type."""
+        result = interpolate("$value", {"value": 42})
+        assert result == 42
+        assert isinstance(result, int)
+
+    def test_single_ref_preserves_float(self):
+        """Single reference preserves float type."""
+        result = interpolate("$value", {"value": 3.14})
+        assert result == 3.14
+        assert isinstance(result, float)
+
+    def test_single_ref_preserves_bool(self):
+        """Single reference preserves boolean type."""
+        result = interpolate("$flag", {"flag": True})
+        assert result is True
+        assert isinstance(result, bool)
+
+    def test_single_ref_preserves_list(self):
+        """Single reference preserves list type."""
+        result = interpolate("$items", {"items": [1, 2, 3]})
+        assert result == [1, 2, 3]
+        assert isinstance(result, list)
+
+    def test_single_ref_preserves_dict(self):
+        """Single reference preserves dict type."""
+        result = interpolate("$data", {"data": {"key": "value"}})
+        assert result == {"key": "value"}
+        assert isinstance(result, dict)
+
+    def test_single_ref_returns_empty_for_none(self):
+        """Single optional reference returns empty string for None."""
+        result = interpolate("$[missing]", {"other": "value"})
+        assert result == ""
+        assert isinstance(result, str)
+
+    def test_bracketed_ref_preserves_type(self):
+        """Bracketed single reference preserves type."""
+        result = interpolate("$(value)", {"value": 42})
+        assert result == 42
+        assert isinstance(result, int)
+
+    def test_nested_ref_preserves_type(self):
+        """Nested single reference preserves type."""
+        result = interpolate("$data>count", {"data": {"count": 100}})
+        assert result == 100
+        assert isinstance(result, int)
+
+    def test_mixed_content_returns_string(self):
+        """Mixed content with literal text returns string."""
+        result = interpolate("Value: $value", {"value": 42})
+        assert result == "Value: 42"
+        assert isinstance(result, str)
+
+    def test_multiple_refs_returns_string(self):
+        """Multiple references return string."""
+        result = interpolate("$a$b", {"a": 1, "b": 2})
+        assert result == "12"
+        assert isinstance(result, str)
+
+    def test_expression_block_returns_string(self):
+        """Expression block always returns string."""
+        result = interpolate("{% 42 %}", {})
+        assert result == "42"
+        assert isinstance(result, str)
+
+    def test_expression_block_with_ref_returns_string(self):
+        """Expression block with reference returns string."""
+        result = interpolate("{% $value %}", {"value": 42})
+        assert result == "42"
+        assert isinstance(result, str)
+
+
 class TestRealWorldScenarios:
     """Test real-world usage scenarios."""
 
@@ -404,17 +480,16 @@ class TestInterpolateDictDropEmpty:
         assert result["missing"] == ""  # interpolate converts None to empty string
 
     def test_drop_empty_true(self):
-        """With drop_empty=True, keys with None values are excluded."""
+        """With drop_empty=True, keys with None or empty string values are excluded."""
         config = DRLConfig(drop_empty=True)
         templates = {
             "present": "$value",
-            "missing": "$[missing]",
+            "missing": "$[missing]",  # Returns "" (None->empty string), will be dropped
         }
         context = {"value": "exists"}
         result = interpolate_dict(templates, context, config)
         assert "present" in result
-        # Note: interpolate returns "" for None, which is not None, so it's kept
-        # The drop_empty works on actual None values from non-string templates
+        assert "missing" not in result  # Empty strings are dropped with drop_empty=True
 
     def test_drop_empty_with_nested(self):
         """drop_empty works recursively on nested dicts."""
@@ -430,7 +505,7 @@ class TestInterpolateDictDropEmpty:
         assert result == {"outer": "Hello", "nested": {"inner": "World"}}
 
     def test_falsy_values_preserved(self):
-        """Falsy values (0, False, '') are NOT dropped, only None."""
+        """Falsy values (0, False) are NOT dropped, but empty strings are."""
         config = DRLConfig(drop_empty=True)
         templates = {
             "zero": 0,
@@ -438,7 +513,8 @@ class TestInterpolateDictDropEmpty:
             "empty_str": "",
         }
         result = interpolate_dict(templates, {}, config)
-        assert result == {"zero": 0, "false_val": False, "empty_str": ""}
+        assert result == {"zero": 0, "false_val": False}
+        assert "empty_str" not in result  # Empty strings are dropped
 
 
 class TestInterpolateDictCustomSyntax:

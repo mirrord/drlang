@@ -1066,7 +1066,7 @@ result = interpolate_dict(templates, context)
 
 ## Batch Processing with interpolate_dict
 
-When using `interpolate_dict` to process multiple templates, you can configure it to exclude keys with `None` values from the result using the `drop_empty` option. This is useful for cleaning API responses, generating sparse data structures, or handling optional fields.
+When using `interpolate_dict` to process multiple templates, you can configure it to exclude keys with empty values from the result using the `drop_empty` option. This is useful for cleaning API responses, generating sparse data structures, or handling optional fields.
 
 ### Basic Usage
 
@@ -1076,8 +1076,8 @@ from drlang import interpolate_dict, DRLConfig
 templates = {
     "name": "$user>name",
     "email": "$user>email",
-    "phone": "$[user>phone]",      # Optional - may return empty
-    "address": "$[user>address]",  # Optional - may return empty
+    "phone": "$[user>phone]",      # Optional - returns empty string if missing
+    "address": "$[user>address]",  # Optional - returns empty string if missing
 }
 
 context = {
@@ -1088,30 +1088,31 @@ context = {
     }
 }
 
-# Default behavior - all keys included
+# Default behavior - all keys included (empty strings preserved)
 result = interpolate_dict(templates, context)
 # Returns: {'name': 'Alice', 'email': 'alice@example.com', 'phone': '', 'address': ''}
 
-# With drop_empty=True - empty values may be excluded
+# With drop_empty=True - None and empty string values are excluded
 config = DRLConfig(drop_empty=True)
 result = interpolate_dict(templates, context, config)
+# Returns: {'name': 'Alice', 'email': 'alice@example.com'}
 ```
 
-### Falsy Values Are Preserved
+### Falsy Values Behavior
 
-The `drop_empty` option only drops `None` values, not other falsy values like `0`, `False`, or empty strings:
+The `drop_empty` option drops `None` and empty string `""` values. Other falsy values like `0` and `False` are preserved:
 
 ```python
 templates = {
-    "count": 0,            # Falsy but NOT None
-    "enabled": False,      # Falsy but NOT None
-    "message": "",         # Falsy but NOT None
+    "count": 0,            # Falsy but NOT empty - preserved
+    "enabled": False,      # Falsy but NOT empty - preserved
+    "message": "",         # Empty string - DROPPED
 }
 
 config = DRLConfig(drop_empty=True)
 result = interpolate_dict(templates, {}, config)
-# Returns: {'count': 0, 'enabled': False, 'message': ''}
-# All falsy values are preserved, only None would be dropped
+# Returns: {'count': 0, 'enabled': False}
+# Only empty strings (and None) are dropped
 ```
 
 ### Real-World Use Case: Email Template Generation
