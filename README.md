@@ -3,20 +3,19 @@
 [![PyPI - Version](https://img.shields.io/pypi/v/drlang.svg)](https://pypi.org/project/drlang)
 [![PyPI - Python Version](https://img.shields.io/pypi/pyversions/drlang.svg)](https://pypi.org/project/drlang)
 
-**Dynamic Reference Language (DRLang)** - A powerful expression language for data processing and configuration management.
+**Dynamic Reference Language (DRLang)** - A powerful string templating and expression language for data processing and configuration management.
 
-DRLang is a lightweight library that interprets string expressions to extract, process, and transform data from dictionary-like sources. It provides:
+DRLang provides `interpolate()` and `interpolate_dict()` functions for processing template strings with embedded references and expressions. Templates are **literal by default** - only content marked with `$references` or `{% expression blocks %}` is evaluated.
 
-- 🔗 **Data References**: Three reference types for different behaviors: `$[ref]` optional, `$(ref)` required, `${ref}` literal fallback
-- 🧮 **Math Operations**: Full arithmetic support with proper operator precedence
-- 🔍 **Comparisons & Logic**: Compare values and combine conditions with `and`, `or`, `not`
-- ⚙️ **Conditional Logic**: Inline conditionals with the `if()` function
-- � **List Operations**: Index lists, manipulate with 9 functions, iterate with map/filter/reduce
-- �📦 **40+ Built-in Functions**: String manipulation, math, random, date/time, and more
-- 🎨 **Custom Syntax**: Tailor the syntax to match your preferred style
+**Key Features:**
+- 📝 **String Interpolation**: `interpolate()` for single templates, `interpolate_dict()` for batch processing
+- 🔒 **Type Preservation**: Single references preserve original types (int, float, bool, list, dict)
+- 🔗 **Data References**: Three types: `$[ref]` optional, `$(ref)` required, `${ref}` literal fallback
+- 🧮 **Expression Blocks**: Full expression evaluation in `{% %}` blocks
+- 📦 **40+ Built-in Functions**: String manipulation, math, random, date/time, regex, and more
+- 🎨 **Custom Syntax**: Tailor reference indicators and key delimiters to your style
 - 🔧 **Custom Functions**: Extend with your own domain-specific functions
-- 📝 **Type Safety**: Automatic type conversion based on function signatures
-- 🐛 **Verbose Error Messages**: Detailed error context with position tracking and helpful suggestions
+- 🐛 **Verbose Errors**: Detailed error context with position tracking and helpful suggestions
 
 Perfect for configuration files, template systems, data pipelines, and business rule engines.
 
@@ -29,21 +28,26 @@ pip install drlang
 ```
 
 ```python
-from drlang import interpret
+from drlang import interpolate, interpolate_dict
 
-# Simple data access
+# Simple template interpolation
 data = {"user": {"name": "Alice", "age": 30}}
-print(interpret("$user>name", data))  # "Alice"
+print(interpolate("Hello $user>name!", data))  # "Hello Alice!"
 
-# Math and comparisons
-print(interpret("$user>age >= 18", data))  # True
+# Type preservation - single references preserve their type
+print(interpolate("$user>age", data))  # 30 (int, not string)
 
-# Conditional logic
-expr = 'if $(user>age >= 18, "adult", "minor")'
-print(interpret(expr, data))  # "adult"
+# Expression blocks for calculations
+print(interpolate("Age in months: {% $user>age * 12 %}", data))  # "Age in months: 360"
 
-# String functions
-print(interpret('upper $(user>name)', data))  # "ALICE"
+# Batch processing multiple templates
+templates = {
+    "greeting": "Hello $user>name!",
+    "is_adult": "{% $user>age >= 18 %}",
+    "status": "{% if($user>age >= 18, 'adult', 'minor') %}"
+}
+results = interpolate_dict(templates, data)
+# {'greeting': 'Hello Alice!', 'is_adult': 'True', 'status': 'adult'}
 ```
 
 ### Interactive CLI
@@ -80,6 +84,9 @@ drlang --ref @ --delim .
 - [Quick Start](#quick-start)
 - [Interactive CLI](#interactive-cli)
 - [Usage Examples](#usage-examples)
+- [String Interpolation](#string-interpolation)
+- [Batch Processing with interpolate_dict](#batch-processing-with-interpolate_dict)
+- [Low-Level Expression Evaluation](#low-level-expression-evaluation)
 - [Syntax](#syntax)
   - [Data References](#data-references)
   - [Mathematical Operators](#mathematical-operators)
@@ -88,10 +95,8 @@ drlang --ref @ --delim .
   - [Conditional Logic](#conditional-logic)
   - [List Operations](#list-operations)
   - [Function Calls](#function-calls)
-- [String Interpolation](#string-interpolation)
 - [Custom Syntax](#custom-syntax)
 - [Custom Functions](#custom-functions)
-- [Batch Processing with interpolate_dict](#batch-processing-with-interpolate_dict)
 - [Error Handling](#error-handling)
 - [Available Functions](#available-functions)
 - [Installation](#installation)
@@ -99,50 +104,90 @@ drlang --ref @ --delim .
 
 ## Usage Examples
 
-### Basic Data Access
+### Basic Template Interpolation
 
 ```python
-import drlang
+from drlang import interpolate, interpolate_dict
 import json
 
 # Load data
-source_data = json.load(open("my_file.json"))
+with open("config.json") as f:
+    context = json.load(f)
 
-# Access nested values
-config_item = "print $(root>timestamp)"
-drlang.interpret(config_item, source_data)
-# Prints the timestamp value
+# Simple template with reference
+result = interpolate("Server: $server>host:{% $server>port %}", context)
+# "Server: localhost:8080"
+
+# URL construction (bare refs stop at /)
+result = interpolate("https://$domain/api/v1/users/$user_id", 
+                     {"domain": "api.example.com", "user_id": "123"})
+# "https://api.example.com/api/v1/users/123"
 ```
 
 ### String Processing
 
 ```python
-source_data = json.load(open("map_locations.json"))
-config_item = "split $(houses>Maryland City>occupants, ',')"
-people = drlang.interpret(config_item, source_data)
-# Returns list of occupants
+from drlang import interpolate
+
+data = {"names": "alice,bob,charlie"}
+
+# Use expression blocks for function calls
+result = interpolate("Users: {% split($names, ',') %}", data)
+# "Users: ['alice', 'bob', 'charlie']"
+
+# Transform data
+result = interpolate("{% upper($names) %}", data)
+# "ALICE,BOB,CHARLIE"
 ```
 
-### Calculations and Logic
+### Calculations and Conditional Logic
 
 ```python
+from drlang import interpolate
+
 # Calculate discounted price
 data = {"price": 100, "discount": 0.2, "quantity": 5}
-expr = "$(price * (1 - $discount)) * $quantity"
-total = drlang.interpret(expr, data)
-# Returns: 400.0
+result = interpolate("Total: ${% ($price * (1 - $discount)) * $quantity %}", data)
+# "Total: $400.0"
 
-# Conditional access control
+# Conditional content
 data = {"age": 25, "verified": True}
-expr = 'if $(age >= 18 and $verified, "access granted", "access denied")'
-result = drlang.interpret(expr, data)
-# Returns: "access granted"
+result = interpolate("Status: {% if($age >= 18 and $verified, 'access granted', 'access denied') %}", data)
+# "Status: access granted"
+```
+
+### Batch Processing with interpolate_dict
+
+```python
+from drlang import interpolate_dict, DRLConfig
+
+templates = {
+    "greeting": "Hello $user>name!",
+    "summary": "You have {% $items %} items worth ${% $total %}",
+    "nested": {
+        "email": "Contact: $user>email",
+        "phone": "$[user>phone]"  # Optional - empty string if missing
+    }
+}
+
+context = {
+    "user": {"name": "Alice", "email": "alice@example.com"},
+    "items": 5,
+    "total": 99.99
+}
+
+# Process all templates at once
+results = interpolate_dict(templates, context)
+
+# With drop_empty=True, exclude keys with empty values
+config = DRLConfig(drop_empty=True)
+results = interpolate_dict(templates, context, config)
 ```
 
 ### Working with Custom Functions
 
 ```python
-from drlang import DRLConfig, interpret
+from drlang import interpolate, DRLConfig
 
 # Define business logic
 def calculate_shipping(weight, zone):
@@ -152,8 +197,8 @@ def calculate_shipping(weight, zone):
 config = DRLConfig(custom_functions={"shipping": calculate_shipping})
 
 data = {"weight": 3.5, "zone": "regional"}
-cost = interpret("shipping $(weight, $zone)", data, config)
-# Returns: 11.75
+result = interpolate("Shipping cost: ${% shipping($weight, $zone) %}", data, config)
+# "Shipping cost: $11.75"
 ```
 
 ## Interactive CLI
@@ -318,7 +363,19 @@ See [Batch Processing with interpolate_dict](#batch-processing-with-interpolate_
 
 ## Syntax
 
-DRLang supports the following language features:
+DRLang supports the following language features. These features can be used in two ways:
+
+1. **In `{% %}` expression blocks** within `interpolate()` templates:
+   ```python
+   interpolate("Result: {% $x + $y * 2 %}", {"x": 10, "y": 5})  # "Result: 20"
+   ```
+
+2. **Directly with `interpret()`** for raw expression evaluation:
+   ```python
+   interpret("$x + $y * 2", {"x": 10, "y": 5})  # 20
+   ```
+
+The examples below use `interpret()` to show the raw expression results. In templates, wrap these expressions in `{% %}` blocks.
 
 ### Data References
 
@@ -990,7 +1047,7 @@ final_price = interpret(expr, data, config)
 
 ## String Interpolation
 
-DRLang provides powerful string interpolation via the `interpolate()` and `interpolate_dict()` functions. These treat strings as **literal text by default**, only evaluating content that is explicitly marked for interpolation.
+DRLang's primary API consists of `interpolate()` and `interpolate_dict()` functions. These treat strings as **literal text by default**, only evaluating content that is explicitly marked for interpolation.
 
 ### interpolate() Function
 
@@ -998,6 +1055,8 @@ The `interpolate()` function processes a template string where:
 - Regular text is treated as literal (unchanged)
 - `$reference` paths are resolved from context
 - `{% expression %}` blocks are evaluated as DRL expressions
+
+**Type Preservation:** If the template contains ONLY a single reference (e.g., `"$value"`), the original type from context is preserved. Mixed content always returns a string.
 
 ```python
 from drlang import interpolate
@@ -1010,7 +1069,11 @@ interpolate("Hello, world!", {})  # "Hello, world!"
 # Reference interpolation
 interpolate("Hello $name!", context)  # "Hello Alice!"
 
-# Expression blocks
+# Type preservation - single references keep their type
+interpolate("$count", context)  # 5 (int)
+interpolate("$price", context)  # 19.99 (float)
+
+# Expression blocks (always return strings when mixed with content)
 interpolate("Total: {% $count * $price %}", context)  # "Total: 99.95"
 
 # Mixed content
@@ -1182,6 +1245,44 @@ result = interpolate_dict(templates, context)
 #     }
 # }
 ```
+
+## Low-Level Expression Evaluation
+
+While `interpolate()` and `interpolate_dict()` are the recommended primary APIs for most use cases, DRLang also exposes the `interpret()` function for direct expression evaluation.
+
+### interpret() Function
+
+The `interpret()` function evaluates a raw DRL expression and returns the result without any string wrapping:
+
+```python
+from drlang import interpret
+
+# Direct expression evaluation
+interpret("$x + $y", {"x": 10, "y": 5})  # 15
+
+# Function calls
+interpret('split($text, ",")', {"text": "a,b,c"})  # ["a", "b", "c"]
+
+# Complex expressions with full type preservation
+interpret("$data>values", {"data": {"values": [1, 2, 3]}})  # [1, 2, 3]
+
+# Comparisons and logic
+interpret("$age >= 18 and $verified", {"age": 25, "verified": True})  # True
+
+# Conditional logic
+interpret("if($score > 50, 'pass', 'fail')", {"score": 75})  # "pass"
+```
+
+**When to use `interpret()` instead of `interpolate()`:**
+- When you need the raw result of an expression (not a template string)
+- For programmatic expression evaluation in rule engines
+- When building tools that work with DRL expressions directly
+- For the CLI and debugging tools
+
+**When to use `interpolate()` instead:**
+- For template strings with literal content mixed with dynamic values
+- When generating user-facing text, emails, or configuration files
+- For batch processing with `interpolate_dict()`
 
 ## Error Handling
 
