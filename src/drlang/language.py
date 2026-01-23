@@ -1009,28 +1009,53 @@ def interpolate_dict(
         config = DEFAULT_CONFIG
 
     results = {}
+    interp = {
+        str: interpolate,
+        dict: interpolate_dict,
+        list: interpolate_list,
+    }
     for key, template in templates.items():
-        if isinstance(template, dict):
-            # Recursively handle nested dictionaries
-            value = interpolate_dict(template, context, config)
-        elif isinstance(template, list):
-            # Handle lists of templates
-            value = [
-                interpolate(item, context, config) if isinstance(item, str) else item
-                for item in template
-            ]
-        elif isinstance(template, str):
-            # Interpolate single template strings
-            value = interpolate(template, context, config)
-        else:
-            # Pass through non-string values unchanged
-            value = template
+        value = interp.get(type(template), lambda t, c, cfg: t)(
+            template, context, config
+        )
 
         # Only include in results if not empty, or if drop_empty is False
         # drop_empty=True excludes both None and empty string ""
         if not config.drop_empty or (value is not None and value != ""):
             results[key] = value
 
+    return results
+
+
+def interpolate_list(
+    templates: list[Any],
+    context: Dict[str, Any],
+    config: Optional[DRLConfig] = None,
+) -> list[Any]:
+    """Interpolate multiple template strings from a list.
+
+    Args:
+        templates: A list of template strings or nested dictionaries/lists
+        context: The data dictionary to resolve references from
+        config: Optional DRLConfig for custom syntax symbols (includes drop_empty flag)
+    """
+    if config is None:
+        config = DEFAULT_CONFIG
+    results = []
+    interp = {
+        str: interpolate,
+        dict: interpolate_dict,
+        list: interpolate_list,
+    }
+    for template in templates:
+        value = interp.get(type(template), lambda t, c, cfg: t)(
+            template, context, config
+        )
+
+        # Only include in results if not empty, or if drop_empty is False
+        # drop_empty=True excludes both None and empty string ""
+        if not config.drop_empty or (value is not None and value != ""):
+            results.append(value)
     return results
 
 

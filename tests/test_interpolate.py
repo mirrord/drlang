@@ -464,6 +464,43 @@ class TestInterpolateDictLists:
         assert result == {"items": []}
 
 
+class TestInterpolateListDicts:
+    """Test list handling in interpolate_dict."""
+
+    def test_list_of_templates(self):
+        """Lists of templates are processed."""
+        templates = {
+            "messages": [{"Hello": "$name"}, {"Greeting": "{% $greeting %} Charles"}]
+        }
+        context = {"name": "Charlie", "greeting": "Heyo"}
+        result = interpolate_dict(templates, context)
+        assert result == {
+            "messages": [{"Hello": "Charlie"}, {"Greeting": "Heyo Charles"}]
+        }
+
+    def test_list_of_list_of_templates(self):
+        """Lists of templates are processed."""
+        templates = {
+            "messages": [
+                [{"Hello": "$name"}, {"Greeting": "{% $greeting %} Charles"}],
+                ["$item1", 42, "$item2", True],
+            ]
+        }
+        context = {
+            "name": "Charlie",
+            "greeting": "Heyo",
+            "item1": "Apple",
+            "item2": "Banana",
+        }
+        result = interpolate_dict(templates, context)
+        assert result == {
+            "messages": [
+                [{"Hello": "Charlie"}, {"Greeting": "Heyo Charles"}],
+                ["Apple", 42, "Banana", True],
+            ]
+        }
+
+
 class TestInterpolateDictDropEmpty:
     """Test drop_empty configuration in interpolate_dict."""
 
