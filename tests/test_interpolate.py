@@ -330,6 +330,22 @@ class TestTypePreservation:
         assert isinstance(result, str)
 
 
+class TestTypePreservingExpressions:
+    """Test type-preserving expression interpolation."""
+
+    def test_type_preserving_expression_returns_native_type(self):
+        """{%= %} returns the raw expression result when used alone."""
+        result = interpolate("{%= 5 + 10 %}", {})
+        assert result == 15
+        assert isinstance(result, int)
+
+    def test_type_preserving_expression_with_literals_falls_back_to_string(self):
+        """Mixing literals with {%= %} yields a string result."""
+        result = interpolate("Value: {%= 5 + 10 %}", {})
+        assert result == "Value: 15"
+        assert isinstance(result, str)
+
+
 class TestRealWorldScenarios:
     """Test real-world usage scenarios."""
 

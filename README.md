@@ -10,6 +10,7 @@ DRLang provides `interpolate()` and `interpolate_dict()` functions for processin
 **Key Features:**
 - 📝 **String Interpolation**: `interpolate()` for single templates, `interpolate_dict()` for batch processing
 - 🔒 **Type Preservation**: Single references preserve original types (int, float, bool, list, dict)
+- 🎯 **Type-Preserving Expressions**: `{%= %}` blocks preserve native types when used alone
 - 🔗 **Data References**: Three types: `$[ref]` optional, `$(ref)` required, `${ref}` literal fallback
 - 🧮 **Expression Blocks**: Full expression evaluation in `{% %}` blocks
 - 📦 **40+ Built-in Functions**: String manipulation, math, random, date/time, regex, and more
@@ -36,6 +37,9 @@ print(interpolate("Hello $user>name!", data))  # "Hello Alice!"
 
 # Type preservation - single references preserve their type
 print(interpolate("$user>age", data))  # 30 (int, not string)
+
+# Type-preserving expressions - use {%= %} to keep native types
+print(interpolate("{%= 5 + 10 %}", {}))  # 15 (int, not string)
 
 # Expression blocks for calculations
 print(interpolate("Age in months: {% $user>age * 12 %}", data))  # "Age in months: 360"
@@ -1075,6 +1079,11 @@ interpolate("$price", context)  # 19.99 (float)
 
 # Expression blocks (always return strings when mixed with content)
 interpolate("Total: {% $count * $price %}", context)  # "Total: 99.95"
+
+# Type-preserving expression blocks - use {%= %} to keep native types
+interpolate("{%= 5 + 10 %}", {})  # 15 (int, not "15")
+interpolate("{%= $count * 2 %}", context)  # 10 (int, not "10")
+interpolate("Result: {%= $count * 2 %}", context)  # "Result: 10" (string, mixed content)
 
 # Mixed content
 interpolate("Hi $name, you have {% $count * 2 %} items", context)

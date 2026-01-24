@@ -1119,17 +1119,24 @@ def interpolate(
     # Track if this is a "pure reference" template (single reference, no literals, no {% %})
     # If so, we preserve the original type instead of converting to string
     has_literal_text = False
-    has_expression_block = False
+    has_string_expression_block = False
     reference_count = 0
     single_ref_value = None  # Store the value if it's a single reference
+    type_preserving_expr_count = 0
+    type_preserving_expr_value = None
 
     while i < template_len:
         # Check for {% expression %} block
         if template[i : i + 2] == "{%":
-            has_expression_block = True  # Expression blocks always force string output
             # Find the closing %}
             start_pos = i
             i += 2  # Skip {%
+
+            # Optional '=' right after '{%' enables type preservation
+            preserve_type = False
+            if i < template_len and template[i] == "=":
+                preserve_type = True
+                i += 1
 
             # Skip leading whitespace
             while i < template_len and template[i].isspace():
@@ -1164,6 +1171,11 @@ def interpolate(
 
             try:
                 value = interpret(expr, context, config)
+                if preserve_type:
+                    type_preserving_expr_count += 1
+                    type_preserving_expr_value = value
+                else:
+                    has_string_expression_block = True
                 result.append(str(value) if value is not None else "")
             except DRLError:
                 raise
@@ -1291,11 +1303,29 @@ def interpolate(
         result.append(template[i])
         i += 1
 
+    string_result = "".join(result)
+
+    # Type preservation for a single type-preserving expression block
+    if (
+        type_preserving_expr_count == 1
+        and not has_literal_text
+        and reference_count == 0
+        and not has_string_expression_block
+    ):
+        if type_preserving_expr_value is None:
+            return ""
+        return type_preserving_expr_value
+
     # Type preservation: if template was just a single reference with no literals
     # or expression blocks, return the original value type (except None -> "")
-    if reference_count == 1 and not has_literal_text and not has_expression_block:
+    if (
+        reference_count == 1
+        and not has_literal_text
+        and not has_string_expression_block
+        and type_preserving_expr_count == 0
+    ):
         if single_ref_value is None:
             return ""
         return single_ref_value
 
-    return "".join(result)
+    return string_result
