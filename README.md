@@ -12,6 +12,7 @@ DRLang provides `interpolate()` and `interpolate_dict()` functions for processin
 - 🔒 **Type Preservation**: Single references preserve original types (int, float, bool, list, dict)
 - 🎯 **Type-Preserving Expressions**: `{%= %}` blocks preserve native types when used alone
 - 🔗 **Data References**: Three types: `$[ref]` optional, `$(ref)` required, `${ref}` literal fallback
+- 🔄 **Nested References**: Dynamic key resolution with `$(outer>$(inner)>path)` syntax
 - 🧮 **Expression Blocks**: Full expression evaluation in `{% %}` blocks
 - 📦 **40+ Built-in Functions**: String manipulation, math, random, date/time, regex, and more
 - 🎨 **Custom Syntax**: Tailor reference indicators and key delimiters to your style
@@ -532,6 +533,127 @@ interpolate("Hello $(user name)!", {"user name": "Bob"})  # "Hello Bob!"
 # For keys with parentheses, bracketed syntax is required
 interpolate("Result: $(getValue())", {"getValue()": 42})  # "Result: 42"
 ```
+
+#### Nested References
+
+DRLang supports **nested references** where inner references are resolved first and their values are substituted into the outer reference path. This enables dynamic key selection and powerful data access patterns:
+
+```python
+data = {
+    "rocks": {
+        "mica": {"color": "silver", "hardness": 2.5},
+        "granite": {"color": "gray", "hardness": 6.5},
+    },
+    "records": {"best_rock": "mica"}
+}
+
+# First resolves $(records>best_rock) → "mica"
+# Then resolves $(rocks>mica>color) → "silver"
+drlang.interpret("$(rocks>$(records>best_rock)>color)", data)
+# Returns: "silver"
+```
+
+**Multiple nested references in one path:**
+
+```python
+data = {
+    "database": {
+        "users_table": {
+            "row_5": {"name": "John", "age": 30},
+            "row_10": {"name": "Jane", "age": 25}
+        }
+    },
+    "pointers": {"table_name": "users_table", "row_id": "row_10"}
+}
+
+# Resolves both nested references dynamically
+drlang.interpret("$(database>$(pointers>table_name)>$(pointers>row_id)>name)", data)
+# Returns: "Jane"
+```
+
+**Deeply nested references (nested within nested):**
+
+```python
+data = {
+    "data": {
+        "item1": {"value": "found it!"},
+        "item2": {"value": "something else"}
+    },
+    "keys": {"k1": "k2", "k2": "k3", "k3": "item1"}
+}
+
+# Resolves innermost first, working outward:
+# $(keys>k1) → "k2"
+# $(keys>k2) → "k3"
+# $(keys>k3) → "item1"
+# $(data>item1>value) → "found it!"
+drlang.interpret("$(data>$(keys>$(keys>$(keys>k1)))>value)", data)
+# Returns: "found it!"
+```
+
+**Nested references in string interpolation:**
+
+```python
+from drlang import interpolate
+
+data = {
+    "products": {
+        "laptop": {"name": "Pro Laptop", "price": 1299},
+        "mouse": {"name": "Wireless Mouse", "price": 29}
+    },
+    "cart": {"selected_item": "laptop"}
+}
+
+interpolate(
+    "Product: $(products>$(cart>selected_item)>name), Price: $$(products>$(cart>selected_item)>price)",
+    data
+)
+# Returns: "Product: Pro Laptop, Price: $1299"
+```
+
+**Real-world use case - Environment-based configuration:**
+
+```python
+data = {
+    "config": {
+        "dev": {"db_host": "localhost", "api_url": "http://localhost:3000"},
+        "prod": {"db_host": "prod.example.com", "api_url": "https://api.example.com"}
+    },
+    "environment": {"current": "prod"}
+}
+
+# Dynamically access config based on current environment
+drlang.interpret("$(config>$(environment>current)>db_host)", data)
+# Returns: "prod.example.com"
+```
+
+**Nested references with all reference behaviors:**
+
+Nested references work with all three reference types:
+- **Required** `$(...)`  - Inner/outer references raise errors if missing
+- **Optional** `$[...]` - Returns `None` if any reference in the chain is missing
+- **Passthrough** `${...}` - Returns original string if missing
+
+```python
+data = {
+    "users": {"alice": {"email": "alice@example.com"}},
+    "session": {"user_id": "bob"}  # bob doesn't exist
+}
+
+# Optional nested reference - no error, returns empty string
+interpolate("Email: $[users>$(session>user_id)>email]", data)
+# Returns: "Email: "
+
+# Required nested reference - would raise DRLReferenceError
+# interpolate("Email: $(users>$(session>user_id)>email)", data)  # Error!
+```
+
+**Key features:**
+- ✅ Supports unlimited nesting depth (up to 100 levels for safety)
+- ✅ Works with custom syntax via `DRLConfig`
+- ✅ Compatible with all three reference behaviors
+- ✅ Works in both `interpret()` and `interpolate()`
+- ✅ Can be used with mathematical operations and functions
 
 ### Mathematical Operators
 

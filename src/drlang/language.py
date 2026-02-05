@@ -448,6 +448,149 @@ def tokenize(expression: str, config: Optional[DRLConfig] = None) -> List[Token]
     return tokens
 
 
+def resolve_nested_references_in_path(
+    reference: str,
+    context: Dict[str, Any],
+    config: Optional[DRLConfig] = None,
+    expression: str = "",
+    position: int = -1,
+) -> str:
+    """Resolve nested references within a reference path.
+
+    Handles nested references like: rocks>$(records>best_rock)>color
+    Inner references are resolved first and their values substituted into the path.
+
+    Args:
+        reference: The reference path that may contain nested references
+        context: The data dictionary to resolve from
+        config: Optional DRLConfig with custom symbols
+        expression: The full expression being parsed (for error reporting)
+        position: Position in expression (for error reporting)
+
+    Returns:
+        The reference path with all nested references resolved and substituted
+    """
+    if config is None:
+        config = DEFAULT_CONFIG
+
+    ref_indicator = config.ref_indicator
+    result = reference
+
+    # Keep resolving nested references until there are none left
+    # We need to handle this iteratively to support deeply nested references
+    max_iterations = 100  # Prevent infinite loops
+    iteration = 0
+
+    while ref_indicator in result and iteration < max_iterations:
+        iteration += 1
+
+        # Find the first nested reference
+        start = result.find(ref_indicator)
+        if start == -1:
+            break
+
+        i = start + len(ref_indicator)
+
+        # Determine if it's a bracketed reference and what type
+        nested_behavior = "required"
+        closing_delimiter = None
+        nested_ref = ""
+
+        if i < len(result):
+            if result[i] == "(":
+                nested_behavior = "required"
+                closing_delimiter = ")"
+                i += 1  # Skip opening delimiter
+            elif result[i] == "[":
+                nested_behavior = "optional"
+                closing_delimiter = "]"
+                i += 1  # Skip opening delimiter
+            elif result[i] == "{":
+                nested_behavior = "passthrough"
+                closing_delimiter = "}"
+                i += 1  # Skip opening delimiter
+            else:
+                # Bare reference - find where it ends
+                # It ends at key_delimiter or another ref_indicator
+                end = i
+                while end < len(result):
+                    if (
+                        result[end : end + len(config.key_delimiter)]
+                        == config.key_delimiter
+                    ):
+                        break
+                    if result[end : end + len(ref_indicator)] == ref_indicator:
+                        break
+                    end += 1
+
+                nested_ref = result[i:end]
+
+                # Recursively resolve the nested reference
+                nested_value = resolve_reference(
+                    nested_ref,
+                    context,
+                    config,
+                    expression,
+                    position,
+                    nested_behavior,
+                    "",
+                )
+
+                # Replace in the result - just the reference part, not the indicator
+                result = result[:start] + str(nested_value) + result[end:]
+                continue
+
+        # For bracketed references, find the matching closing delimiter
+        if closing_delimiter:
+            depth = 1
+            bracket_pairs = {")": "(", "]": "[", "}": "{"}
+            opening = bracket_pairs.get(closing_delimiter, "")
+
+            while i < len(result) and depth > 0:
+                char = result[i]
+                if char == closing_delimiter:
+                    depth -= 1
+                    if depth == 0:
+                        break  # Don't include final closing delimiter
+                elif char == opening:
+                    depth += 1
+                nested_ref += char
+                i += 1
+
+            if depth > 0:
+                # Unterminated nested reference - this will be caught later
+                raise DRLSyntaxError(
+                    f"Unterminated nested reference: expected closing '{closing_delimiter}'",
+                    expression,
+                    position,
+                    f"Nested reference in path started but never closed",
+                )
+
+            # Recursively resolve the nested reference
+            nested_value = resolve_reference(
+                nested_ref, context, config, expression, position, nested_behavior, ""
+            )
+
+            # Replace the entire nested reference (including indicator and brackets) with its value
+            nested_full = ref_indicator + opening + nested_ref + closing_delimiter
+            result = (
+                result[:start] + str(nested_value) + result[start + len(nested_full) :]
+            )
+        else:
+            # No closing delimiter found, break to avoid infinite loop
+            break
+
+    if iteration >= max_iterations:
+        raise DRLError(
+            "Maximum nested reference depth exceeded",
+            expression,
+            position,
+            f"Path: {reference}. Possible circular reference?",
+        )
+
+    return result
+
+
 def resolve_reference(
     reference: str,
     context: Dict[str, Any],
@@ -458,6 +601,9 @@ def resolve_reference(
     original_ref: str = "",
 ) -> Any:
     """Resolve a data reference like 'root>timestamp' from context dict.
+
+    Supports nested references like: rocks>$(records>best_rock)>color
+    where inner references are resolved first and substituted into the path.
 
     Args:
         reference: The reference path (e.g., 'root>timestamp')
@@ -477,6 +623,11 @@ def resolve_reference(
     """
     if config is None:
         config = DEFAULT_CONFIG
+
+    # First, resolve any nested references in the path
+    reference = resolve_nested_references_in_path(
+        reference, context, config, expression, position
+    )
 
     parts = reference.split(config.key_delimiter)
     value = context

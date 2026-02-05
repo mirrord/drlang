@@ -89,6 +89,31 @@ Bare vs Bracketed References in Templates:
     "User: $(user name)"     -> "User: Alice"
     "Value: $(getData())"    -> "Value: 42"
 
+Nested References:
+  Inner references are resolved first, then substituted into outer path:
+  
+  $(rocks>$(records>best_rock)>color)
+  
+  Resolution process:
+    1. $(records>best_rock) -> "mica"
+    2. $(rocks>mica>color)  -> "silver"
+  
+  Examples:
+    drlang> set rocks {"mica": {"color": "silver"}, "granite": {"color": "gray"}}
+    drlang> set records {"best_rock": "mica"}
+    drlang> $(rocks>$(records>best_rock)>color)
+    => 'silver'
+  
+  Multiple nested references:
+    $(db>$(ptr>table)>$(ptr>row)>col)
+  
+  Works with all reference types:
+    $(...)  Required - error if missing
+    $[...]  Optional - returns None if missing
+    ${...}  Passthrough - returns original if missing
+  
+  Supports unlimited nesting depth (up to 100 levels)
+
 ADDITIONAL FEATURES
 ===================
 
